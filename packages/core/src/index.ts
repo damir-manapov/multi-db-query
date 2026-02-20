@@ -56,7 +56,9 @@ export {
   resolveTableAccess,
 } from './accessControl.js'
 // Dialects
+export { ClickHouseDialect } from './dialects/clickhouse.js'
 export { PostgresDialect } from './dialects/postgres.js'
+export { TrinoDialect } from './dialects/trino.js'
 // Metadata Registry
 export type { ConnectivityEdge, RegistrySnapshot } from './metadataRegistry.js'
 export { MetadataRegistry } from './metadataRegistry.js'
