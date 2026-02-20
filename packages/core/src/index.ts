@@ -65,6 +65,9 @@ export { MetadataRegistry } from './metadataRegistry.js'
 // Name Resolution
 export type { ResolveResult } from './nameResolver.js'
 export { resolveNames } from './nameResolver.js'
+// Pipeline
+export type { CreateMultiDbOptions, MultiDb } from './pipeline.js'
+export { createMultiDb } from './pipeline.js'
 // Query Planner
 export type {
   CachePlan,
