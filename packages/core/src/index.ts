@@ -34,6 +34,24 @@ export type {
   TableMeta,
   TableRoleAccess,
 } from '@mkven/multi-db-validation'
+// Re-export validation functions and classes
+export {
+  ConfigError,
+  ConnectionError,
+  ExecutionError,
+  MetadataIndex,
+  MultiDbError,
+  PlannerError,
+  ProviderError,
+  ValidationError,
+  validateConfig,
+  validateQuery,
+} from '@mkven/multi-db-validation'
+// Metadata Registry
+export type { ConnectivityEdge, RegistrySnapshot } from './metadataRegistry.js'
+export { MetadataRegistry } from './metadataRegistry.js'
+// Static provider helpers
+export { staticMetadata, staticRoles } from './staticProviders.js'
 // Public interfaces
 export type { CacheProvider, DbExecutor } from './types/interfaces.js'
 // IR types (internal)
@@ -60,3 +78,5 @@ export type {
   WhereGroup,
   WhereNode,
 } from './types/ir.js'
+// Providers
+export type { MetadataProvider, RoleProvider } from './types/providers.js'
