@@ -18,6 +18,9 @@
   "dependencies": {
     "@mkven/multi-db": "workspace:*"
   },
+  "peerDependencies": {
+    "ioredis": ">=5.0.0"
+  },
   "scripts": {
     "build": "tsc -b"
   }

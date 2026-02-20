@@ -18,6 +18,9 @@
   "dependencies": {
     "@mkven/multi-db": "workspace:*"
   },
+  "peerDependencies": {
+    "@clickhouse/client": ">=1.0.0"
+  },
   "scripts": {
     "build": "tsc -b"
   }

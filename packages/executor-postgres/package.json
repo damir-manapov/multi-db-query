@@ -18,6 +18,9 @@
   "dependencies": {
     "@mkven/multi-db": "workspace:*"
   },
+  "peerDependencies": {
+    "pg": ">=8.0.0"
+  },
   "scripts": {
     "build": "tsc -b"
   }
