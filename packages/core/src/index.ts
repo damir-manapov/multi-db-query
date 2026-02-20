@@ -58,6 +58,9 @@ export {
 // Metadata Registry
 export type { ConnectivityEdge, RegistrySnapshot } from './metadataRegistry.js'
 export { MetadataRegistry } from './metadataRegistry.js'
+// Name Resolution
+export type { ResolveResult } from './nameResolver.js'
+export { resolveNames } from './nameResolver.js'
 // Static provider helpers
 export { staticMetadata, staticRoles } from './staticProviders.js'
 // Public interfaces
