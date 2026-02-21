@@ -1,6 +1,15 @@
 import type { DbExecutor, MetadataConfig, RoleMeta } from '@mkven/multi-db'
-import { createMultiDb, staticMetadata, staticRoles } from '@mkven/multi-db'
+import {
+  createMultiDb,
+  MetadataIndex,
+  staticMetadata,
+  staticRoles,
+  validateConfig,
+  validateQuery,
+} from '@mkven/multi-db'
+import type { ValidateResult } from '../../src/client.js'
 import { describeQueryContract } from '../../src/contract/queryContract.js'
+import { describeValidationContract } from '../../src/contract/validationContract.js'
 
 // ── Fixtures ───────────────────────────────────────────────────
 
@@ -85,3 +94,26 @@ describeQueryContract('in-process (direct)', async () => {
   })
   return db
 })
+
+// ── Validation contract (in-process, zero I/O) ────────────────
+
+describeValidationContract(
+  'in-process (direct)',
+  async () => {
+    const index = new MetadataIndex(config, roles)
+    return {
+      async validateQuery(input) {
+        const err = validateQuery(input.definition, input.context, index, roles)
+        if (err !== null) throw err
+        return { valid: true } satisfies ValidateResult
+      },
+      async validateConfig(input) {
+        const err = validateConfig(input.metadata)
+        if (err !== null) throw err
+        return { valid: true } satisfies ValidateResult
+      },
+    }
+  },
+  config,
+  roles,
+)

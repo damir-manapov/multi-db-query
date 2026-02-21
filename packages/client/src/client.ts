@@ -22,9 +22,25 @@ export interface MultiDbClientConfig {
   readonly roles?: readonly RoleMeta[] | undefined
 }
 
+export interface ValidateQueryInput {
+  readonly definition: QueryDefinition
+  readonly context: ExecutionContext
+}
+
+export interface ValidateConfigInput {
+  readonly metadata: MetadataConfig
+  readonly roles: readonly RoleMeta[]
+}
+
+export interface ValidateResult {
+  readonly valid: true
+}
+
 export interface MultiDbClient {
   query<T = unknown>(input: { definition: QueryDefinition; context: ExecutionContext }): Promise<QueryResult<T>>
   healthCheck(): Promise<HealthCheckResult>
+  validateQuery(input: ValidateQueryInput): Promise<ValidateResult>
+  validateConfig(input: ValidateConfigInput): Promise<ValidateResult>
 }
 
 // ── Factory ────────────────────────────────────────────────────
@@ -87,6 +103,70 @@ export function createMultiDbClient(config: MultiDbClientConfig): MultiDbClient 
         headers: customHeaders,
       })
       return (await res.json()) as HealthCheckResult
+    },
+
+    async validateQuery(input: ValidateQueryInput) {
+      const controller = new AbortController()
+      const timer = timeout > 0 ? setTimeout(() => controller.abort(), timeout) : undefined
+
+      try {
+        const res = await fetchFn(`${baseUrl}/validate/query`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...customHeaders },
+          body: JSON.stringify(input),
+          signal: controller.signal,
+        })
+
+        const body = (await res.json()) as Record<string, unknown>
+
+        if (!res.ok) {
+          throw deserializeError(body)
+        }
+
+        return body as unknown as ValidateResult
+      } catch (err) {
+        if (err instanceof MultiDbError) throw err
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw new ConnectionError('REQUEST_TIMEOUT', `Request timed out after ${timeout}ms`, {
+            timeoutMs: timeout,
+          })
+        }
+        throw new ConnectionError('NETWORK_ERROR', err instanceof Error ? err.message : String(err), {})
+      } finally {
+        if (timer !== undefined) clearTimeout(timer)
+      }
+    },
+
+    async validateConfig(input: ValidateConfigInput) {
+      const controller = new AbortController()
+      const timer = timeout > 0 ? setTimeout(() => controller.abort(), timeout) : undefined
+
+      try {
+        const res = await fetchFn(`${baseUrl}/validate/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...customHeaders },
+          body: JSON.stringify(input),
+          signal: controller.signal,
+        })
+
+        const body = (await res.json()) as Record<string, unknown>
+
+        if (!res.ok) {
+          throw deserializeError(body)
+        }
+
+        return body as unknown as ValidateResult
+      } catch (err) {
+        if (err instanceof MultiDbError) throw err
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw new ConnectionError('REQUEST_TIMEOUT', `Request timed out after ${timeout}ms`, {
+            timeoutMs: timeout,
+          })
+        }
+        throw new ConnectionError('NETWORK_ERROR', err instanceof Error ? err.message : String(err), {})
+      } finally {
+        if (timer !== undefined) clearTimeout(timer)
+      }
     },
   }
 }

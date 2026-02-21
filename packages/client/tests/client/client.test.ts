@@ -1,5 +1,5 @@
 import type { HealthCheckResult, QueryResult } from '@mkven/multi-db-validation'
-import { ConnectionError, ExecutionError, PlannerError, ValidationError } from '@mkven/multi-db-validation'
+import { ConfigError, ConnectionError, ExecutionError, PlannerError, ValidationError } from '@mkven/multi-db-validation'
 import { describe, expect, it } from 'vitest'
 import { createMultiDbClient } from '../../src/client.js'
 
@@ -372,5 +372,160 @@ describe('HTTP Client — local validation', () => {
 
     // Fetch should NOT have been called
     expect(fetchCalled).toBe(false)
+  })
+})
+
+describe('HTTP Client — validate endpoints', () => {
+  it('#239: validate query — valid definition returns { valid: true }', async () => {
+    const client = createMultiDbClient({
+      baseUrl: 'http://localhost:3000',
+      fetch: mockFetch(() => ({ status: 200, body: { valid: true } })) as typeof globalThis.fetch,
+    })
+
+    const result = await client.validateQuery({
+      definition: { from: 'orders', columns: ['id'] },
+      context: { roles: { user: ['admin'] } },
+    })
+
+    expect(result.valid).toBe(true)
+  })
+
+  it('#240: validate query — invalid input returns ValidationError', async () => {
+    const errorBody = {
+      code: 'VALIDATION_FAILED',
+      message: 'Validation failed: 1 error',
+      fromTable: 'nonExistentTable',
+      errors: [
+        {
+          code: 'UNKNOWN_TABLE',
+          message: "Table 'nonExistentTable' not found",
+          details: { table: 'nonExistentTable' },
+        },
+      ],
+    }
+
+    const client = createMultiDbClient({
+      baseUrl: 'http://localhost:3000',
+      fetch: mockFetch(() => ({ status: 400, body: errorBody })) as typeof globalThis.fetch,
+    })
+
+    try {
+      await client.validateQuery({
+        definition: { from: 'nonExistentTable' },
+        context: { roles: { user: ['admin'] } },
+      })
+      expect.unreachable('should have thrown')
+    } catch (err) {
+      expect(err).toBeInstanceOf(ValidationError)
+      const ve = err as ValidationError
+      expect(ve.code).toBe('VALIDATION_FAILED')
+      expect(ve.fromTable).toBe('nonExistentTable')
+      expect(ve.errors[0]?.code).toBe('UNKNOWN_TABLE')
+    }
+  })
+
+  it('#241: validate config — valid config returns { valid: true }', async () => {
+    const client = createMultiDbClient({
+      baseUrl: 'http://localhost:3000',
+      fetch: mockFetch(() => ({ status: 200, body: { valid: true } })) as typeof globalThis.fetch,
+    })
+
+    const result = await client.validateConfig({
+      metadata: {
+        databases: [{ id: 'pg-main', engine: 'postgres' }],
+        tables: [
+          {
+            id: 'orders',
+            apiName: 'orders',
+            database: 'pg-main',
+            physicalName: 'public.orders',
+            columns: [],
+            primaryKey: ['id'],
+            relations: [],
+          },
+        ],
+        caches: [],
+        externalSyncs: [],
+      },
+      roles: [{ id: 'admin', tables: '*' as const }],
+    })
+
+    expect(result.valid).toBe(true)
+  })
+
+  it('#242: validate config — invalid config returns ConfigError', async () => {
+    const errorBody = {
+      code: 'CONFIG_INVALID',
+      message: 'Config invalid: 1 error',
+      errors: [{ code: 'DUPLICATE_API_NAME', message: "Duplicate apiName 'orders'", details: { entity: 'orders' } }],
+    }
+
+    const client = createMultiDbClient({
+      baseUrl: 'http://localhost:3000',
+      fetch: mockFetch(() => ({ status: 400, body: errorBody })) as typeof globalThis.fetch,
+    })
+
+    try {
+      await client.validateConfig({
+        metadata: {
+          databases: [{ id: 'pg-main', engine: 'postgres' }],
+          tables: [],
+          caches: [],
+          externalSyncs: [],
+        },
+        roles: [],
+      })
+      expect.unreachable('should have thrown')
+    } catch (err) {
+      expect(err).toBeInstanceOf(ConfigError)
+      const ce = err as ConfigError
+      expect(ce.code).toBe('CONFIG_INVALID')
+      expect(ce.errors[0]?.code).toBe('DUPLICATE_API_NAME')
+    }
+  })
+
+  it('#239b: validate query sends correct URL path', async () => {
+    let capturedUrl = ''
+    const captureFetch = mockFetch((url) => {
+      capturedUrl = url
+      return { status: 200, body: { valid: true } }
+    })
+
+    const client = createMultiDbClient({
+      baseUrl: 'http://localhost:3000',
+      fetch: captureFetch as typeof globalThis.fetch,
+    })
+
+    await client.validateQuery({
+      definition: { from: 'orders' },
+      context: { roles: { user: ['admin'] } },
+    })
+
+    expect(capturedUrl).toBe('http://localhost:3000/validate/query')
+  })
+
+  it('#241b: validate config sends correct URL path', async () => {
+    let capturedUrl = ''
+    const captureFetch = mockFetch((url) => {
+      capturedUrl = url
+      return { status: 200, body: { valid: true } }
+    })
+
+    const client = createMultiDbClient({
+      baseUrl: 'http://localhost:3000',
+      fetch: captureFetch as typeof globalThis.fetch,
+    })
+
+    await client.validateConfig({
+      metadata: {
+        databases: [],
+        tables: [],
+        caches: [],
+        externalSyncs: [],
+      },
+      roles: [],
+    })
+
+    expect(capturedUrl).toBe('http://localhost:3000/validate/config')
   })
 })
