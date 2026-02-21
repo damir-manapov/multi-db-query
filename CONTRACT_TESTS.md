@@ -193,33 +193,9 @@ Trino: `{ enabled: true }`
   - `orderId → orders.id` (many-to-one)
   - `productId → products.id` (many-to-one)
 
-#### samples (pg-main)
+#### samples (pg-main) / chSamples (ch-analytics)
 
-Mirror table for per-dialect operator testing. Identical schema exists in both pg-main and ch-analytics (as `chSamples`), enabling the same test assertions to be reused across all three dialects.
-
-| apiName | physicalName | type | nullable | maskingFn |
-|---|---|---|---|---|
-| id | id | int | false | — |
-| name | name | string | false | — |
-| email | email | string | false | — |
-| category | category | string | false | — |
-| amount | amount | decimal | false | — |
-| discount | discount | decimal | true | — |
-| status | status | string | false | — |
-| tags | tags | string[] | true | — |
-| scores | scores | int[] | true | — |
-| isActive | is_active | boolean | true | — |
-| note | note | string | true | — |
-| createdAt | created_at | timestamp | false | — |
-| dueDate | due_date | date | true | — |
-| externalId | external_id | uuid | false | — |
-
-- Primary key: `[id]`
-- Relations: none
-
-#### chSamples (ch-analytics)
-
-Identical schema to `samples` on pg-main. Used for ClickHouse-direct and Trino cross-DB operator testing.
+Mirror tables for dialect-parameterized testing. **Identical schema and seed data** exist in both pg-main (`samples`) and ch-analytics (`chSamples`), enabling the same test to run against PostgreSQL, ClickHouse, and Trino with identical assertions (see [Parameterization](#parameterization)).
 
 | apiName | physicalName | type | nullable | maskingFn |
 |---|---|---|---|---|
@@ -237,10 +213,43 @@ Identical schema to `samples` on pg-main. Used for ClickHouse-direct and Trino c
 | createdAt | created_at | timestamp | false | — |
 | dueDate | due_date | date | true | — |
 | externalId | external_id | uuid | false | — |
+| managerId | manager_id | int | true | — |
 
 - Primary key: `[id]`
-- Relations:
-  - `id → samples.id` (many-to-one, cross-DB mirror — enables Trino routing)
+- Relations (samples): `managerId → samples.id` (self-referencing, nullable)
+- Relations (chSamples): `id → samples.id` (cross-DB mirror — enables Trino routing), `managerId → chSamples.id` (self-referencing, nullable)
+
+#### sampleItems (pg-main) / chSampleItems (ch-analytics)
+
+Child table for `samples`/`chSamples`. Identical schema and seed data in both databases.
+
+| apiName | physicalName | type | nullable | maskingFn |
+|---|---|---|---|---|
+| id | id | int | false | — |
+| sampleId | sample_id | int | false | — |
+| label | label | string | false | — |
+| category | category | string | false | — |
+| amount | amount | decimal | false | — |
+| quantity | quantity | int | false | — |
+| status | status | string | false | — |
+
+- Primary key: `[id]`
+- Relations (sampleItems): `sampleId → samples.id`
+- Relations (chSampleItems): `sampleId → chSamples.id`
+
+#### sampleDetails (pg-main) / chSampleDetails (ch-analytics)
+
+Grandchild table for `sampleItems`/`chSampleItems`. Enables 3-table join and nested EXISTS tests.
+
+| apiName | physicalName | type | nullable | maskingFn |
+|---|---|---|---|---|
+| id | id | int | false | — |
+| sampleItemId | sample_item_id | int | false | — |
+| info | info | string | true | — |
+
+- Primary key: `[id]`
+- Relations (sampleDetails): `sampleItemId → sampleItems.id`
+- Relations (chSampleDetails): `sampleItemId → chSampleItems.id`
 
 ### External Syncs (Debezium)
 
@@ -325,13 +334,37 @@ The implementation must populate tables with deterministic data so assertions on
 
 **samples** (pg-main, minimum 5 rows) and **chSamples** (ch-analytics, **identical** data):
 
-| id | name | email | category | amount | discount | status | tags | scores | isActive | note | createdAt | dueDate | externalId |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | Alpha | alpha@test.com | electronics | 100.00 | 10.00 | active | ["fast","new"] | [1,2] | true | note-1 | 2024-01-15T10:00:00Z | 2024-02-20 | uuid-c1 |
-| 2 | Beta | beta@test.com | clothing | 200.00 | null | paid | ["slow"] | [3] | true | null | 2024-02-20T14:30:00Z | 2024-03-25 | uuid-c2 |
-| 3 | Gamma | gamma@test.com | electronics | 50.00 | 5.00 | cancelled | ["fast"] | null | false | note-3 | 2024-03-10T08:15:00Z | null | uuid-c3 |
-| 4 | Delta | delta@test.com | food | 300.00 | null | active | null | [] | null | null | 2024-04-05T16:45:00Z | 2024-05-01 | uuid-c1 |
-| 5 | Epsilon | epsilon@test.com | electronics | 150.00 | 0.00 | shipped | ["fast","slow","new"] | [1,2,3] | true | note-5 | 2024-05-12T12:00:00Z | 2024-06-15 | uuid-c2 |
+| id | name | email | category | amount | discount | status | tags | scores | isActive | note | createdAt | dueDate | externalId | managerId |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | Alpha | alpha@test.com | electronics | 100.00 | 10.00 | active | ["fast","new"] | [1,2] | true | note-1 | 2024-01-15T10:00:00Z | 2024-02-20 | uuid-s1 | null |
+| 2 | Beta | beta@test.com | clothing | 200.00 | null | paid | ["slow"] | [3] | true | null | 2024-02-20T14:30:00Z | 2024-03-25 | uuid-s2 | 1 |
+| 3 | Gamma | gamma@test.com | electronics | 50.00 | 5.00 | cancelled | ["fast"] | null | false | note-3 | 2024-03-10T08:15:00Z | null | uuid-s3 | 1 |
+| 4 | Delta | delta@test.com | food | 300.00 | null | active | null | [] | null | null | 2024-04-05T16:45:00Z | 2024-05-01 | uuid-s4 | null |
+| 5 | Epsilon | epsilon@test.com | electronics | 150.00 | 0.00 | shipped | ["fast","slow","new"] | [1,2,3] | true | note-5 | 2024-05-12T12:00:00Z | 2024-06-15 | uuid-s5 | 2 |
+
+**sampleItems** (pg-main, minimum 6 rows) and **chSampleItems** (ch-analytics, **identical** data):
+
+| id | sampleId | label | category | amount | quantity | status |
+|---|---|---|---|---|---|---|
+| 1 | 1 | item-A | electronics | 25.00 | 2 | active |
+| 2 | 1 | item-B | clothing | 120.00 | 1 | active |
+| 3 | 2 | item-C | clothing | 40.00 | 5 | paid |
+| 4 | 3 | item-D | electronics | 60.00 | 3 | cancelled |
+| 5 | 5 | item-E | food | 10.00 | 1 | active |
+| 6 | 5 | item-F | electronics | 20.00 | 2 | paid |
+
+> Note: sample 4 (Delta) has **no** items — used for NOT EXISTS tests.
+
+**sampleDetails** (pg-main, minimum 4 rows) and **chSampleDetails** (ch-analytics, **identical** data):
+
+| id | sampleItemId | info |
+|---|---|---|
+| 1 | 1 | detail-1 |
+| 2 | 2 | null |
+| 3 | 3 | detail-3 |
+| 4 | 5 | detail-4 |
+
+> Note: sampleItems 4 and 6 have **no** details — used for nested EXISTS tests.
 
 ---
 
@@ -398,112 +431,123 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 
 ## 3. Filtering
 
-> **Dialect note:** All tests in sections 3–9 target pg-main tables (orders, users, products, invoices, orderItems) and thus exercise only the PostgreSQL dialect. ClickHouse and Trino dialects are tested separately in **Section 19: Per-Dialect Operator Correctness** using the `samples`/`chSamples` mirror tables with identical seed data.
+<a id="parameterization"></a>
+
+> **Parameterization — all dialects:** Every test in sections 3–9 is executed **three times**, once per SQL dialect. Tests are written using pg-main table names for readability. The runner substitutes tables per variant:
+>
+> | Variant | `samples` → | `sampleItems` → | `sampleDetails` → | Routing trigger | Engine |
+> |---|---|---|---|---|---|
+> | **pg** | `samples` | `sampleItems` | `sampleDetails` | — | PostgreSQL |
+> | **ch** | `chSamples` | `chSampleItems` | `chSampleDetails` | — | ClickHouse |
+> | **trino** | `chSamples` | `chSampleItems` | `chSampleDetails` | transparent `JOIN samples ON chSamples.id = samples.id` added (pg-main table → cross-DB → Trino) | Trino |
+>
+> All mirror tables share **identical schema and seed data**, so expected results are the same across all three variants.
+> The only exception is **C505** (composite PK rejection) which uses `orderItems` and runs once (pg-only).
 
 ### 3.1 Comparison Operators
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C100 | `=` filter | orders, `status = 'active'` | all returned rows have `status === 'active'` |
-| C101 | `!=` filter | orders, `status != 'cancelled'` | no returned row has `status === 'cancelled'` |
-| C102 | `>` filter | orders, `total > 100` | all returned `total > 100` |
-| C103 | `<` filter | orders, `total < 200` | all returned `total < 200` |
-| C104 | `>=` filter | orders, `total >= 150` | all returned `total >= 150` |
-| C105 | `<=` filter | orders, `total <= 100` | all returned `total <= 100` |
-| C106 | `=` on boolean column | orders, `isPaid = true` | all returned rows have `isPaid === true` |
-| C107 | `!=` on boolean column | orders, `isPaid != true` | returned rows have `isPaid !== true` (includes `false` and `null`) |
-| C108 | `=` on uuid column | users, `id = 'uuid-c1'` | exactly 1 row returned |
+| C100 | `=` filter | samples, `status = 'active'` | 2 rows (ids 1, 4) |
+| C101 | `!=` filter | samples, `status != 'cancelled'` | 4 rows (ids 1, 2, 4, 5) |
+| C102 | `>` filter | samples, `amount > 100` | 3 rows (ids 2, 4, 5) |
+| C103 | `<` filter | samples, `amount < 200` | 3 rows (ids 1, 3, 5) |
+| C104 | `>=` filter | samples, `amount >= 150` | 3 rows (ids 2, 4, 5) |
+| C105 | `<=` filter | samples, `amount <= 100` | 2 rows (ids 1, 3) |
+| C106 | `=` on boolean column | samples, `isActive = true` | 3 rows (ids 1, 2, 5) |
+| C107 | `!=` on boolean column | samples, `isActive != true` | 2 rows (ids 3, 4 — `false` and `null`) |
+| C108 | `=` on uuid column | samples, `externalId = 'uuid-s1'` | exactly 1 row (id 1) |
 
 ### 3.2 Pattern Operators (string)
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C110 | `like` filter | users, `email like '%@example%'` | all returned emails match pattern |
-| C111 | `notLike` filter | users, `email notLike '%alice%'` | no returned email contains 'alice' |
-| C112 | `ilike` filter | users, `email ilike '%EXAMPLE%'` | case-insensitive match |
-| C113 | `notIlike` filter | users, `email notIlike '%ALICE%'` | no returned email matches case-insensitively |
-| C114 | `contains` filter | users, `email contains 'example'` | all returned emails contain 'example' |
-| C115 | `icontains` filter | users, `email icontains 'EXAMPLE'` | case-insensitive contains |
-| C116 | `notContains` filter | users, `email notContains 'alice'` | no email contains 'alice' |
-| C117 | `notIcontains` filter | users, `email notIcontains 'ALICE'` | case-insensitive not-contains |
-| C118 | `startsWith` filter | users, `email startsWith 'alice'` | all emails start with 'alice' |
-| C119 | `istartsWith` filter | users, `email istartsWith 'ALICE'` | case-insensitive startsWith |
-| C120 | `endsWith` filter | users, `email endsWith '@example.com'` | all emails end with '@example.com' |
-| C121 | `iendsWith` filter | users, `email iendsWith '@EXAMPLE.COM'` | case-insensitive endsWith |
-| C122 | `contains` with wildcard escaping | users, `email contains 'test%user'` | `%` in value is escaped — no wildcard expansion |
-| C123 | `contains` with underscore escaping | users, `email contains 'test_user'` | `_` in value is escaped |
+| C110 | `like` filter | samples, `email like '%@test%'` | all 5 rows match |
+| C111 | `notLike` filter | samples, `email notLike '%alpha%'` | 4 rows (not id 1) |
+| C112 | `ilike` filter | samples, `email ilike '%TEST%'` | all 5 rows — case-insensitive match |
+| C113 | `notIlike` filter | samples, `email notIlike '%ALPHA%'` | 4 rows (not id 1) |
+| C114 | `contains` filter | samples, `email contains 'alpha'` | 1 row (id 1) |
+| C115 | `icontains` filter | samples, `email icontains 'ALPHA'` | 1 row (id 1) |
+| C116 | `notContains` filter | samples, `email notContains 'alpha'` | 4 rows |
+| C117 | `notIcontains` filter | samples, `email notIcontains 'ALPHA'` | 4 rows |
+| C118 | `startsWith` filter | samples, `name startsWith 'Al'` | 1 row (id 1, Alpha) |
+| C119 | `istartsWith` filter | samples, `name istartsWith 'AL'` | 1 row (id 1) |
+| C120 | `endsWith` filter | samples, `email endsWith '@test.com'` | all 5 rows |
+| C121 | `iendsWith` filter | samples, `email iendsWith '@TEST.COM'` | all 5 rows |
+| C122 | `contains` with wildcard escaping | samples, `name contains 'Al%ha'` | 0 rows — `%` is treated literally, not as wildcard |
+| C123 | `contains` with underscore escaping | samples, `name contains 'Al_ha'` | 0 rows — `_` is treated literally |
 
 ### 3.3 Range Operators
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C130 | `between` filter (decimal) | orders, `total between { from: 100, to: 200 }` | all returned `total >= 100 && total <= 200` |
-| C131 | `notBetween` filter | orders, `total notBetween { from: 100, to: 200 }` | all returned `total < 100 or total > 200` |
-| C132 | `between` on int | orders, `quantity between { from: 2, to: 5 }` | all `quantity >= 2 && quantity <= 5` |
-| C133 | `between` on timestamp | orders, `createdAt between { from: '2024-01-01...', to: '2024-03-31...' }` | returned rows within range |
-| C134 | `between` on date | invoices, `dueDate between { from: '2024-02-01', to: '2024-04-01' }` | returned rows within range |
-| C135 | `notBetween` on int | orders, `quantity notBetween { from: 2, to: 5 }` | all returned `quantity < 2 or quantity > 5` |
+| C130 | `between` filter (decimal) | samples, `amount between { from: 100, to: 200 }` | 3 rows (ids 1, 2, 5) |
+| C131 | `notBetween` filter | samples, `amount notBetween { from: 100, to: 200 }` | 2 rows (ids 3, 4) |
+| C132 | `between` on int | samples, `id between { from: 2, to: 4 }` | 3 rows (ids 2, 3, 4) |
+| C133 | `between` on timestamp | samples, `createdAt between { from: '2024-01-01T00:00:00Z', to: '2024-03-31T23:59:59Z' }` | 3 rows (ids 1, 2, 3) |
+| C134 | `between` on date | samples, `dueDate between { from: '2024-02-01', to: '2024-05-01' }` | 3 rows (ids 1, 2, 4) |
+| C135 | `notBetween` on int | samples, `id notBetween { from: 2, to: 4 }` | 2 rows (ids 1, 5) |
 
 ### 3.4 Set Operators
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C140 | `in` filter | orders, `status in ['active', 'paid']` | all returned statuses are 'active' or 'paid' |
-| C141 | `notIn` filter | orders, `status notIn ['cancelled']` | no returned status is 'cancelled' |
-| C142 | `in` on int column | orders, `quantity in [2, 5, 10]` | all returned quantities in set |
-| C143 | `in` on uuid column | users, `id in ['uuid-c1', 'uuid-c2']` | exactly 2 rows matching |
-| C144 | `in` on decimal column | orders, `total in [100.00, 200.00]` | all returned totals in set |
+| C140 | `in` filter | samples, `status in ['active', 'paid']` | 3 rows (ids 1, 2, 4) |
+| C141 | `notIn` filter | samples, `status notIn ['cancelled']` | 4 rows |
+| C142 | `in` on int column | samples, `id in [1, 3, 5]` | 3 rows |
+| C143 | `in` on uuid column | samples, `externalId in ['uuid-s1', 'uuid-s2']` | 2 rows (ids 1, 2) |
+| C144 | `in` on decimal column | samples, `amount in [100.00, 200.00]` | 2 rows (ids 1, 2) |
 
 ### 3.5 Null Operators
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C150 | `isNull` filter | orders, `productId isNull` | all returned rows have `productId === null` |
-| C151 | `isNotNull` filter | orders, `productId isNotNull` | all returned rows have `productId !== null` |
-| C152 | `isNull` on array column | orders, `priorities isNull` | returned rows have null priorities |
-| C153 | `isNotNull` on array column | orders, `priorities isNotNull` | returned rows have non-null priorities |
+| C150 | `isNull` filter | samples, `discount isNull` | 2 rows (ids 2, 4) |
+| C151 | `isNotNull` filter | samples, `discount isNotNull` | 3 rows (ids 1, 3, 5) |
+| C152 | `isNull` on array column | samples, `tags isNull` | 1 row (id 4) |
+| C153 | `isNotNull` on array column | samples, `tags isNotNull` | 4 rows (ids 1, 2, 3, 5) |
 
 ### 3.6 Levenshtein
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C160 | `levenshteinLte` filter | users, `lastName levenshteinLte { text: 'Smyth', maxDistance: 2 }` | 'Smith' matches (distance 1) |
+| C160 | `levenshteinLte` filter | samples, `name levenshteinLte { text: 'Alphb', maxDistance: 2 }` | 1 row (id 1, 'Alpha', distance 1) |
 
 ### 3.7 Array Operators
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C170 | `arrayContains` (int[]) | orders, `priorities arrayContains 1` | returned rows' priorities contain 1 |
-| C171 | `arrayContainsAll` (string[]) | products, `labels arrayContainsAll ['sale', 'new']` | returned products have both labels |
-| C172 | `arrayContainsAny` (string[]) | products, `labels arrayContainsAny ['sale', 'clearance']` | returned products have at least one |
-| C173 | `arrayIsEmpty` | orders, `priorities arrayIsEmpty` | returned rows have empty `[]` priorities |
-| C174 | `arrayIsNotEmpty` | orders, `priorities arrayIsNotEmpty` | returned rows have non-empty priorities |
-| C175 | `arrayContainsAll` single element | products, `labels arrayContainsAll ['sale']` | same syntax, single-element array |
-| C176 | `arrayContains` on string[] | products, `labels arrayContains 'sale'` | returned products have 'sale' in labels |
+| C170 | `arrayContains` (int[]) | samples, `scores arrayContains 1` | 2 rows (ids 1, 5) |
+| C171 | `arrayContainsAll` (string[]) | samples, `tags arrayContainsAll ['fast', 'new']` | 2 rows (ids 1, 5) |
+| C172 | `arrayContainsAny` (string[]) | samples, `tags arrayContainsAny ['slow', 'new']` | 3 rows (ids 1, 2, 5) |
+| C173 | `arrayIsEmpty` | samples, `scores arrayIsEmpty` | 1 row (id 4) — has `[]` |
+| C174 | `arrayIsNotEmpty` | samples, `scores arrayIsNotEmpty` | 3 rows (ids 1, 2, 5) |
+| C175 | `arrayContainsAll` single element | samples, `tags arrayContainsAll ['fast']` | 3 rows (ids 1, 3, 5) |
+| C176 | `arrayContains` on string[] | samples, `tags arrayContains 'fast'` | 3 rows (ids 1, 3, 5) |
 
 ### 3.8 Column-vs-Column Filters
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C180 | same-table column filter | orders, `total > discount` (QueryColumnFilter) | returned rows: `total > discount` |
-| C181 | cross-table column filter | orders JOIN products, `total > price` (QueryColumnFilter) | returned rows: order total > product price |
+| C180 | same-table column filter | samples, `amount > discount` (QueryColumnFilter) | 3 rows (ids 1, 3, 5 — rows with non-null discount where amount > discount) |
+| C181 | cross-table column filter | samples JOIN sampleItems, `samples.amount > sampleItems.amount` (QueryColumnFilter) | rows where sample amount exceeds item amount |
 
 ### 3.9 Filter Groups (AND/OR/NOT)
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C190 | OR filter group | orders, `(status = 'active' OR status = 'paid')` | all returned statuses 'active' or 'paid' |
-| C191 | AND filter group | orders, `(status = 'active' AND total > 100)` | all returned: active AND total > 100 |
-| C192 | NOT filter group | orders, `NOT (status = 'cancelled')` | no returned status is 'cancelled' |
-| C193 | Nested filter groups | orders, `(status = 'active' OR (total > 100 AND isPaid = true))` | correct logical evaluation |
-| C194 | Deeply nested (3 levels) | orders, `((status = 'active' AND total > 50) OR (status = 'paid' AND NOT (total < 100)))` | correct deep nesting |
+| C190 | OR filter group | samples, `(status = 'active' OR status = 'paid')` | 3 rows (ids 1, 2, 4) |
+| C191 | AND filter group | samples, `(status = 'active' AND amount > 100)` | 1 row (id 4) |
+| C192 | NOT filter group | samples, `NOT (status = 'cancelled')` | 4 rows |
+| C193 | Nested filter groups | samples, `(status = 'active' OR (amount > 100 AND isActive = true))` | 4 rows (ids 1, 2, 4, 5) — correct logical evaluation |
+| C194 | Deeply nested (3 levels) | samples, `((status = 'active' AND amount > 50) OR (status = 'paid' AND NOT (amount < 100)))` | 3 rows (ids 1, 2, 4) — correct deep nesting |
 
 ### 3.10 Filter with Table Qualifier
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C195 | Top-level filter on joined column | orders JOIN products, filter: `{ column: 'category', table: 'products', operator: '=', value: 'electronics' }` | returned products are electronics |
-| C196 | Explicit from-table reference | orders, filter: `{ column: 'status', table: 'orders', operator: '=', value: 'active' }` | same as omitting `table` |
+| C195 | Top-level filter on joined column | samples JOIN sampleItems, filter: `{ column: 'category', table: 'sampleItems', operator: '=', value: 'electronics' }` | returned items are electronics |
+| C196 | Explicit from-table reference | samples, filter: `{ column: 'status', table: 'samples', operator: '=', value: 'active' }` | same as omitting `table` |
 
 ---
 
@@ -511,14 +555,14 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C200 | LEFT JOIN (default) | orders JOIN products | `kind === 'data'`; rows include product columns (some may be null if productId is null) |
-| C201 | INNER JOIN | orders JOIN products `type: 'inner'` | only rows where productId is not null |
-| C202 | Multi-table join (3 tables) | orders JOIN products JOIN users | columns from all 3 tables present |
-| C203 | Join with column selection | orders JOIN products `columns: ['name']` | only `name` from products in result |
-| C204 | Join with `columns: []` | orders, JOIN products `columns: []`, groupBy products.category | join used for groupBy only — no product columns in SELECT |
-| C205 | Join-scoped filter | orders JOIN products, `products.filters: [{ column: 'category', operator: '=', value: 'electronics' }]` | only electronics products matched |
-| C206 | Column collision on join | orders JOIN users (both have `id`) | result keys are qualified: `orders.id`, `users.id` (or similar disambiguation); `meta.columns[].apiName` reflects qualification |
-| C207 | Join filter at top level vs QueryJoin.filters | same filter on joined table, placed in top-level `filters` with `table` qualifier vs `QueryJoin.filters` | identical results |
+| C200 | LEFT JOIN (default) | samples JOIN sampleItems | rows include sampleItem columns (null for sample 4 which has no items) |
+| C201 | INNER JOIN | samples JOIN sampleItems `type: 'inner'` | only samples that have items (no sample 4) |
+| C202 | Multi-table join (3 tables) | samples JOIN sampleItems JOIN sampleDetails | columns from all 3 tables present |
+| C203 | Join with column selection | samples JOIN sampleItems `columns: ['label']` | only `label` from sampleItems in result |
+| C204 | Join with `columns: []` | samples, JOIN sampleItems `columns: []`, groupBy sampleItems.category | join used for groupBy only — no sampleItem columns in SELECT |
+| C205 | Join-scoped filter | samples JOIN sampleItems, `sampleItems.filters: [{ column: 'category', operator: '=', value: 'electronics' }]` | only electronics items matched |
+| C206 | Column collision on join | samples JOIN sampleItems (both have `id`, `category`, `amount`, `status`) | result keys are qualified: `samples.id`, `sampleItems.id`, etc.; `meta.columns[].apiName` reflects qualification |
+| C207 | Join filter at top level vs QueryJoin.filters | same filter on sampleItems, placed in top-level `filters` with `table` qualifier vs `QueryJoin.filters` | identical results |
 
 ---
 
@@ -526,17 +570,17 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C300 | COUNT(*) | orders, `aggregations: [{ column: '*', fn: 'count', alias: 'totalOrders' }]` | `kind === 'data'`; single row; `totalOrders >= 5` |
-| C301 | SUM | orders GROUP BY status, `SUM(total) as totalSum` | grouped results with sum per status |
-| C302 | AVG | orders, `AVG(total) as avgTotal` | result type is decimal |
-| C303 | MIN | orders, `MIN(createdAt) as earliest` | type preserved as timestamp |
-| C304 | MAX | orders, `MAX(total) as maxTotal` | correct max value |
-| C305 | COUNT(column) | invoices, `COUNT(orderId) as orderCount` | counts non-NULL orderId values only |
-| C306 | Multiple aggregations | orders GROUP BY status, `SUM(total) as totalSum, COUNT(*) as cnt` | both aggregation aliases in result |
-| C307 | Aggregation on joined column | orders JOIN products, `SUM(products.price) as totalPrice` | aggregation references joined table |
-| C308 | Aggregation-only (`columns: []`) | orders `columns: []`, `SUM(total) as totalSum` | only aggregation alias in result — no regular columns |
-| C309 | `columns: undefined` + aggregations + groupBy | orders, groupBy: [status], `SUM(total) as totalSum` (columns omitted) | result includes `status` (from groupBy) + `totalSum`; omitted columns defers to groupBy columns only |
-| C310 | SUM on nullable column | orders, `SUM(discount) as discountSum` | NULLs are skipped; result is sum of non-null discounts (10.00 + 5.00 + 0.00 = 15.00) |
+| C300 | COUNT(*) | samples, `aggregations: [{ column: '*', fn: 'count', alias: 'total' }]` | `kind === 'data'`; single row; `total >= 5` |
+| C301 | SUM | samples GROUP BY status, `SUM(amount) as totalAmt` | grouped results with sum per status |
+| C302 | AVG | samples, `AVG(amount) as avgAmt` | result type is decimal |
+| C303 | MIN | samples, `MIN(createdAt) as earliest` | type preserved as timestamp |
+| C304 | MAX | samples, `MAX(amount) as maxAmt` | correct max value (300.00) |
+| C305 | COUNT(column) | samples, `COUNT(discount) as discountCount` | counts non-NULL discount values only (3: ids 1, 3, 5) |
+| C306 | Multiple aggregations | samples GROUP BY status, `SUM(amount) as totalAmt, COUNT(*) as cnt` | both aggregation aliases in result |
+| C307 | Aggregation on joined column | samples JOIN sampleItems, `SUM(sampleItems.amount) as totalItemAmt` | aggregation references joined table |
+| C308 | Aggregation-only (`columns: []`) | samples `columns: []`, `SUM(amount) as totalAmt` | only aggregation alias in result — no regular columns |
+| C309 | `columns: undefined` + aggregations + groupBy | samples, groupBy: [status], `SUM(amount) as totalAmt` (columns omitted) | result includes `status` (from groupBy) + `totalAmt`; omitted columns defers to groupBy columns only |
+| C310 | SUM on nullable column | samples, `SUM(discount) as discountSum` | NULLs are skipped; result is sum of non-null discounts (10.00 + 5.00 + 0.00 = 15.00) |
 
 ---
 
@@ -544,16 +588,16 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C320 | GROUP BY single column | orders, groupBy: [status], columns: [status] | distinct status values, one row per group |
-| C321 | GROUP BY with multi-column | orders, groupBy: [status, isPaid], columns: [status, isPaid], COUNT(*) | grouped by both |
-| C322 | HAVING single condition | orders GROUP BY status, SUM(total) as totalSum, `having: [{ column: 'totalSum', operator: '>', value: 100 }]` | only groups where totalSum > 100 |
-| C323 | HAVING with OR group | orders GROUP BY status, HAVING `(SUM(total) > 1000 OR AVG(total) > 200)` | HAVING with OR logic |
-| C324 | HAVING with BETWEEN | orders GROUP BY status, SUM(total) as totalSum, HAVING `totalSum between { from: 100, to: 500 }` | range in HAVING |
-| C325 | HAVING with NOT BETWEEN | orders GROUP BY status, SUM(total) as totalSum, HAVING `totalSum notBetween { from: 0, to: 10 }` | negated range in HAVING |
-| C326 | HAVING with IS NULL | orders GROUP BY status, SUM(discount) as discountSum, HAVING `discountSum isNull` | groups where all discounts are NULL |
-| C327 | NOT in HAVING group | orders GROUP BY status, HAVING `NOT (SUM(total) > 100 OR COUNT(*) > 5)` | negated HAVING group |
-| C328 | ORDER BY aggregation alias | orders GROUP BY status, SUM(total) as totalSum, orderBy totalSum desc | results ordered by totalSum descending |
-| C329 | GROUP BY joined column | orders JOIN products, groupBy: [{ column: 'category', table: 'products' }], columns: [], COUNT(*) as cnt | grouped by product category; one row per category |
+| C320 | GROUP BY single column | samples, groupBy: [status], columns: [status] | 4 distinct statuses (active, paid, cancelled, shipped) |
+| C321 | GROUP BY with multi-column | samples, groupBy: [status, isActive], columns: [status, isActive], COUNT(*) | grouped by both |
+| C322 | HAVING single condition | samples GROUP BY status, SUM(amount) as totalAmt, `having: [{ column: 'totalAmt', operator: '>', value: 100 }]` | 3 groups: active (400), paid (200), shipped (150) |
+| C323 | HAVING with OR group | samples GROUP BY status, HAVING `(SUM(amount) > 250 OR AVG(amount) > 150)` | 2 groups: active (SUM 400 > 250) and paid (AVG 200 > 150) |
+| C324 | HAVING with BETWEEN | samples GROUP BY status, SUM(amount) as totalAmt, HAVING `totalAmt between { from: 100, to: 300 }` | 2 groups: paid (200) and shipped (150) |
+| C325 | HAVING with NOT BETWEEN | samples GROUP BY status, SUM(amount) as totalAmt, HAVING `totalAmt notBetween { from: 100, to: 300 }` | 2 groups: active (400) and cancelled (50) |
+| C326 | HAVING with IS NULL | samples GROUP BY status, SUM(discount) as discountSum, HAVING `discountSum isNull` | 1 group: paid (all discounts null → SUM is null) |
+| C327 | NOT in HAVING group | samples GROUP BY status, HAVING `NOT (SUM(amount) > 100 OR COUNT(*) > 1)` | 1 group: cancelled (SUM 50, COUNT 1) |
+| C328 | ORDER BY aggregation alias | samples GROUP BY status, SUM(amount) as totalAmt, orderBy totalAmt desc | results ordered by totalAmt descending |
+| C329 | GROUP BY joined column | samples JOIN sampleItems, groupBy: [{ column: 'category', table: 'sampleItems' }], columns: [], COUNT(*) as cnt | grouped by item category; one row per category |
 
 ---
 
@@ -561,14 +605,14 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C400 | ORDER BY single column asc | orders, orderBy: [{ column: 'total', direction: 'asc' }] | rows in ascending total order |
-| C401 | ORDER BY single column desc | orders, orderBy: [{ column: 'total', direction: 'desc' }] | rows in descending total order |
-| C402 | ORDER BY multiple columns | orders, orderBy: [status asc, total desc] | multi-column ordering |
-| C403 | ORDER BY joined column | orders JOIN products, orderBy: [{ column: 'category', table: 'products', direction: 'asc' }] | ordered by joined-table column |
-| C404 | LIMIT | orders, limit: 2 | `data.length <= 2` |
-| C405 | LIMIT + OFFSET | orders, limit: 2, offset: 2 | skips first 2 rows |
-| C406 | DISTINCT | orders columns: [status], distinct: true | unique status values only |
-| C407 | DISTINCT + GROUP BY | orders, distinct: true, groupBy: [status], columns: [status], SUM(total) | valid SQL — DISTINCT has no effect when GROUP BY present |
+| C400 | ORDER BY single column asc | samples, orderBy: [{ column: 'amount', direction: 'asc' }] | rows in ascending amount order |
+| C401 | ORDER BY single column desc | samples, orderBy: [{ column: 'amount', direction: 'desc' }] | rows in descending amount order |
+| C402 | ORDER BY multiple columns | samples, orderBy: [status asc, amount desc] | multi-column ordering |
+| C403 | ORDER BY joined column | samples JOIN sampleItems, orderBy: [{ column: 'category', table: 'sampleItems', direction: 'asc' }] | ordered by joined-table column |
+| C404 | LIMIT | samples, limit: 2 | `data.length <= 2` |
+| C405 | LIMIT + OFFSET | samples, limit: 2, offset: 2 | skips first 2 rows |
+| C406 | DISTINCT | samples columns: [status], distinct: true | 4 unique status values only |
+| C407 | DISTINCT + GROUP BY | samples, distinct: true, groupBy: [status], columns: [status], SUM(amount) | valid SQL — DISTINCT has no effect when GROUP BY present |
 
 ---
 
@@ -576,14 +620,14 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C500 | byIds returns matching rows | orders, `byIds: [1, 2]` | exactly 2 rows; ids are 1 and 2 |
-| C501 | byIds with non-existent IDs | orders, `byIds: [1, 999]` | returns only existing row (id=1) |
-| C502 | byIds with count mode | orders, `byIds: [1, 2, 3]`, `executeMode: 'count'` | `kind === 'count'`; `count === 3` |
-| C503 | byIds with join | orders, `byIds: [1, 2]`, join products | id + product data returned |
-| C504 | byIds with column selection | orders, `byIds: [1]`, columns: [id, status] | only selected columns returned |
-| C505 | byIds rejects composite PK **(negative)** | orderItems, `byIds: [{ orderId: 1, productId: 'uuid-p1' }]`, admin | `ValidationError` with `INVALID_BY_IDS` — byIds requires a single-column primary key |
-| C506 | byIds with filter | orders, `byIds: [1, 2, 3]`, `filters: [{ column: 'status', operator: '=', value: 'active' }]`, admin | returns intersection — only order id=1 (active with id in [1,2,3]); order 2 is 'paid', order 3 is 'cancelled' |
-| C507 | byIds with sql-only | orders, `byIds: [1, 2]`, `executeMode: 'sql-only'`, admin | `kind === 'sql'`; `sql` contains `'WHERE'`; `params` includes primary key values |
+| C500 | byIds returns matching rows | samples, `byIds: [1, 2]` | exactly 2 rows; ids are 1 and 2 |
+| C501 | byIds with non-existent IDs | samples, `byIds: [1, 999]` | returns only existing row (id=1) |
+| C502 | byIds with count mode | samples, `byIds: [1, 2, 3]`, `executeMode: 'count'` | `kind === 'count'`; `count === 3` |
+| C503 | byIds with join | samples, `byIds: [1, 2]`, join sampleItems | id + sampleItem data returned |
+| C504 | byIds with column selection | samples, `byIds: [1]`, columns: [id, status] | only selected columns returned |
+| C505 | byIds rejects composite PK **(negative, pg-only)** | orderItems, `byIds: [{ orderId: 1, productId: 'uuid-p1' }]`, admin | `ValidationError` with `INVALID_BY_IDS` — byIds requires a single-column primary key; **not parameterized** |
+| C506 | byIds with filter | samples, `byIds: [1, 2, 3]`, `filters: [{ column: 'status', operator: '=', value: 'active' }]`, admin | returns only id=1 (active); id=2 is 'paid', id=3 is 'cancelled' |
+| C507 | byIds with sql-only | samples, `byIds: [1, 2]`, `executeMode: 'sql-only'`, admin | `kind === 'sql'`; `sql` contains `'WHERE'`; `params` includes primary key values |
 
 ---
 
@@ -591,20 +635,20 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C600 | EXISTS filter | orders WHERE EXISTS invoices | only orders that have invoices |
-| C601 | NOT EXISTS filter | orders WHERE NOT EXISTS invoices (`exists: false`) | only orders without invoices |
-| C602 | EXISTS with subquery filter | orders WHERE EXISTS invoices(status = 'paid') | only orders with paid invoices |
-| C603 | EXISTS inside OR group | orders WHERE `(status = 'active' OR EXISTS invoices)` | combined logic |
-| C604 | Nested EXISTS | users WHERE EXISTS orders WHERE EXISTS invoices (2-hop reverse FK chain within pg-main) | multi-level EXISTS |
-| C605 | Counted EXISTS (>=) | orders WHERE EXISTS invoices `count: { operator: '>=', value: 2 }` | orders with >= 2 invoices (order id=1 has 2 invoices) |
-| C606 | Counted EXISTS (=) | orders WHERE EXISTS invoices `count: { operator: '=', value: 1 }` | orders with exactly 1 invoice |
-| C607 | Counted EXISTS ignores `exists` field | orders, `exists: false`, `count: { operator: '>=', value: 1 }` | `exists` is ignored — counted subquery decides direction |
-| C608 | Self-referencing EXISTS | users WHERE EXISTS users (via managerId → users.id) | only users who manage other users (uuid-c1 has subordinates) |
-| C609 | EXISTS with join | orders JOIN products WHERE EXISTS invoices | only orders that have invoices, with product data included |
-| C610 | Counted EXISTS (>) | orders WHERE EXISTS invoices `count: { operator: '>', value: 1 }` | orders with > 1 invoices (order id=1 has 2) |
-| C611 | Counted EXISTS (<) | orders WHERE EXISTS invoices `count: { operator: '<', value: 2 }` | orders with < 2 invoices |
-| C612 | Counted EXISTS (!=) | orders WHERE EXISTS invoices `count: { operator: '!=', value: 0 }` | orders with non-zero invoices |
-| C613 | Counted EXISTS (<=) | orders WHERE EXISTS invoices `count: { operator: '<=', value: 1 }` | orders with ≤ 1 invoices |
+| C600 | EXISTS filter | samples WHERE EXISTS sampleItems | only samples that have items (ids 1, 2, 3, 5) |
+| C601 | NOT EXISTS filter | samples WHERE NOT EXISTS sampleItems (`exists: false`) | only samples without items (id 4) |
+| C602 | EXISTS with subquery filter | samples WHERE EXISTS sampleItems(status = 'paid') | only samples with paid items (ids 2, 5) |
+| C603 | EXISTS inside OR group | samples WHERE `(status = 'cancelled' OR EXISTS sampleItems)` | 4 rows (ids 1, 2, 3, 5 — id 3 via status, rest via EXISTS; id 4 excluded) |
+| C604 | Nested EXISTS | samples WHERE EXISTS sampleItems WHERE EXISTS sampleDetails (2-hop chain) | 3 rows (ids 1, 2, 5 — samples whose items have details) |
+| C605 | Counted EXISTS (>=) | samples WHERE EXISTS sampleItems `count: { operator: '>=', value: 2 }` | 2 rows (ids 1, 5 — each has 2 items) |
+| C606 | Counted EXISTS (=) | samples WHERE EXISTS sampleItems `count: { operator: '=', value: 1 }` | 2 rows (ids 2, 3 — each has exactly 1 item) |
+| C607 | Counted EXISTS ignores `exists` field | samples, `exists: false`, `count: { operator: '>=', value: 1 }` | `exists` is ignored — counted subquery decides direction |
+| C608 | Self-referencing EXISTS | samples WHERE EXISTS samples (via managerId → samples.id) | 2 rows (ids 1, 2 — they manage other samples) |
+| C609 | EXISTS with join | samples JOIN sampleItems WHERE EXISTS samples (via managerId) | samples that manage others, with item data included |
+| C610 | Counted EXISTS (>) | samples WHERE EXISTS sampleItems `count: { operator: '>', value: 1 }` | 2 rows (ids 1, 5 — each has > 1 items) |
+| C611 | Counted EXISTS (<) | samples WHERE EXISTS sampleItems `count: { operator: '<', value: 2 }` | 2 rows (ids 2, 3 — each has 1 item, which is < 2) |
+| C612 | Counted EXISTS (!=) | samples WHERE EXISTS sampleItems `count: { operator: '!=', value: 0 }` | 4 rows (ids 1, 2, 3, 5 — have non-zero items) |
+| C613 | Counted EXISTS (<=) | samples WHERE EXISTS sampleItems `count: { operator: '<=', value: 1 }` | 3 rows (ids 2, 3, 4 — 0 or 1 items) |
 
 ---
 
@@ -1096,136 +1140,6 @@ These tests verify the dedicated validation endpoints that run without DB connec
 
 ---
 
-## 19. Per-Dialect Operator Correctness
-
-Sections 3–9 exercise all operators using pg-main tables (orders, users, products), which implicitly test only the **PostgreSQL** dialect. Since each dialect (PostgreSQL, ClickHouse, Trino) has a **separate SQL generator** with materially different SQL — different parameter syntax (`$N` vs `{pN:Type}` vs `?`), column quoting (`"col"` vs `` `col` ``), and dialect-specific functions — identical query logic can produce different bugs in each dialect.
-
-This section re-tests all operator categories against **ClickHouse** and **Trino** using the `samples` / `chSamples` mirror tables with identical seed data (see [Fixture](#fixture)). PostgreSQL is already covered by sections 3–9.
-
-### 19.1 ClickHouse Operators
-
-All tests target `chSamples` (ch-analytics), exercising ClickHouse's `{pN:Type}` typed parameterization, `` `backtick` `` column quoting, and dialect-specific functions (`ilike()`, `startsWith()`, `endsWith()`, `has()`, `hasAll()`, `hasAny()`, `empty()`, `editDistance()`, `IN tuple(...)`).
-
-#### 19.1.1 Comparison & Pattern
-
-| ID | Test | Definition | Assertions |
-|---|---|---|---|
-| C1800 | CH `=` string | chSamples, `status = 'active'` | 2 rows (ids 1, 4) |
-| C1801 | CH `!=` | chSamples, `status != 'cancelled'` | 4 rows |
-| C1802 | CH `>` decimal | chSamples, `amount > 100` | 3 rows (ids 2, 4, 5) |
-| C1803 | CH `like` | chSamples, `email like '%@test%'` | all 5 rows |
-| C1804 | CH `ilike` | chSamples, `email ilike '%TEST%'` | all 5 rows — `ilike()` function |
-| C1805 | CH `contains` | chSamples, `email contains 'alpha'` | 1 row (id 1) |
-| C1806 | CH `icontains` | chSamples, `name icontains 'ALPHA'` | 1 row (id 1) — `ilike()` with escape |
-| C1807 | CH `startsWith` | chSamples, `name startsWith 'Al'` | 1 row (id 1) — native `startsWith()` function |
-| C1808 | CH `endsWith` | chSamples, `email endsWith '@test.com'` | all 5 rows — native `endsWith()` function |
-| C1809 | CH `between` decimal | chSamples, `amount between { from: 100, to: 200 }` | 3 rows (ids 1, 2, 5) |
-| C1810 | CH `notBetween` | chSamples, `amount notBetween { from: 100, to: 200 }` | 2 rows (ids 3, 4) — `NOT (col BETWEEN ...)` wrapping |
-| C1811 | CH `in` | chSamples, `status in ['active', 'paid']` | 3 rows (ids 1, 2, 4) — `IN tuple({p1:String}, {p2:String})` |
-| C1812 | CH `notIn` | chSamples, `status notIn ['cancelled']` | 4 rows — `NOT IN tuple(...)` |
-| C1813 | CH `isNull` | chSamples, `discount isNull` | 2 rows (ids 2, 4) |
-| C1814 | CH `isNotNull` | chSamples, `discount isNotNull` | 3 rows (ids 1, 3, 5) |
-| C1815 | CH `levenshteinLte` | chSamples, `name levenshteinLte { text: 'Alphb', maxDistance: 2 }` | 1 row (id 1, distance 1) — `editDistance()` function |
-
-#### 19.1.2 Array Operators
-
-| ID | Test | Definition | Assertions |
-|---|---|---|---|
-| C1816 | CH `arrayContains` string[] | chSamples, `tags arrayContains 'fast'` | 3 rows (ids 1, 3, 5) — `has()` function |
-| C1817 | CH `arrayContainsAll` | chSamples, `tags arrayContainsAll ['fast', 'new']` | 2 rows (ids 1, 5) — `hasAll()` function |
-| C1818 | CH `arrayContainsAny` | chSamples, `tags arrayContainsAny ['slow', 'new']` | 3 rows (ids 1, 2, 5) — `hasAny()` function |
-| C1819 | CH `arrayIsEmpty` | chSamples, `scores arrayIsEmpty` | 1 row (id 4) — `empty()` function |
-| C1820 | CH `arrayIsNotEmpty` | chSamples, `scores arrayIsNotEmpty` | 3 rows (ids 1, 2, 5) — `NOT empty()` |
-| C1821 | CH `arrayContains` int[] | chSamples, `scores arrayContains 1` | 2 rows (ids 1, 5) — `has()` on int array |
-
-#### 19.1.3 Filter Groups & Column Filter
-
-| ID | Test | Definition | Assertions |
-|---|---|---|---|
-| C1822 | CH OR filter group | chSamples, `(status = 'active' OR status = 'paid')` | 3 rows (ids 1, 2, 4) |
-| C1823 | CH NOT filter group | chSamples, `NOT (status = 'cancelled')` | 4 rows |
-| C1824 | CH column-vs-column | chSamples, `amount > discount` (QueryColumnFilter) | 3 rows (ids 1, 3, 5 — rows with non-null discount where amount > discount) |
-
-#### 19.1.4 Aggregation, GROUP BY, HAVING
-
-| ID | Test | Definition | Assertions |
-|---|---|---|---|
-| C1825 | CH COUNT(*) | chSamples, COUNT(*) as cnt | `cnt >= 5` |
-| C1826 | CH SUM + GROUP BY | chSamples, groupBy: [status], SUM(amount) as totalAmt | grouped sums per status |
-| C1827 | CH HAVING | chSamples GROUP BY status, SUM(amount) as totalAmt, HAVING totalAmt > 100 | only groups where sum > 100 |
-| C1828 | CH AVG | chSamples, AVG(amount) as avgAmt | decimal result |
-
-#### 19.1.5 ORDER BY, LIMIT, DISTINCT, byIds
-
-| ID | Test | Definition | Assertions |
-|---|---|---|---|
-| C1829 | CH ORDER BY + LIMIT + OFFSET | chSamples, orderBy: amount asc, limit: 2, offset: 1 | 2 rows starting from 2nd-lowest amount |
-| C1830 | CH DISTINCT | chSamples, columns: [status], distinct: true | 4 unique statuses (active, paid, cancelled, shipped) |
-| C1831 | CH byIds | chSamples, `byIds: [1, 2]` | 2 rows — `IN tuple({p1:Int32}, {p2:Int32})` |
-
-### 19.2 Trino Operators
-
-All tests use `chSamples JOIN samples` (ch-analytics + pg-main → cross-DB → **Trino executor**). The join is a 1:1 mirror (`chSamples.id = samples.id`), so single-table assertions remain valid. Filters target `chSamples` columns, exercising Trino's `?` positional parameterization, `"catalog"."schema"."table"` fully-qualified naming, `ESCAPE '\\'` for LIKE operators, and dialect-specific functions (`contains()`, `arrays_overlap()`, `array_except()`, `levenshtein_distance()`).
-
-#### 19.2.1 Comparison & Pattern
-
-| ID | Test | Definition | Assertions |
-|---|---|---|---|
-| C1840 | Trino `=` string | chSamples JOIN samples, `chSamples.status = 'active'` | 2 rows; `meta.strategy === 'trino-cross-db'` |
-| C1841 | Trino `!=` | chSamples JOIN samples, `chSamples.status != 'cancelled'` | 4 rows |
-| C1842 | Trino `>` decimal | chSamples JOIN samples, `chSamples.amount > 100` | 3 rows |
-| C1843 | Trino `like` | chSamples JOIN samples, `chSamples.email like '%@test%'` | 5 rows — `LIKE ? ESCAPE '\\\\'` |
-| C1844 | Trino `ilike` | chSamples JOIN samples, `chSamples.email ilike '%TEST%'` | 5 rows — `lower(col) LIKE lower(?) ESCAPE '\\\\'` |
-| C1845 | Trino `contains` | chSamples JOIN samples, `chSamples.email contains 'alpha'` | 1 row — `LIKE ? ESCAPE '\\\\'` with escapeLike |
-| C1846 | Trino `icontains` | chSamples JOIN samples, `chSamples.name icontains 'ALPHA'` | 1 row — `lower()` + LIKE |
-| C1847 | Trino `startsWith` | chSamples JOIN samples, `chSamples.name startsWith 'Al'` | 1 row — `LIKE ? ESCAPE '\\\\'` with prefix |
-| C1848 | Trino `endsWith` | chSamples JOIN samples, `chSamples.email endsWith '@test.com'` | 5 rows — `LIKE ? ESCAPE '\\\\'` with suffix |
-| C1849 | Trino `between` | chSamples JOIN samples, `chSamples.amount between { from: 100, to: 200 }` | 3 rows |
-| C1850 | Trino `notBetween` | chSamples JOIN samples, `chSamples.amount notBetween { from: 100, to: 200 }` | 2 rows |
-| C1851 | Trino `in` | chSamples JOIN samples, `chSamples.status in ['active', 'paid']` | 3 rows — `IN (?, ?)` |
-| C1852 | Trino `notIn` | chSamples JOIN samples, `chSamples.status notIn ['cancelled']` | 4 rows |
-| C1853 | Trino `isNull` | chSamples JOIN samples, `chSamples.discount isNull` | 2 rows |
-| C1854 | Trino `isNotNull` | chSamples JOIN samples, `chSamples.discount isNotNull` | 3 rows |
-| C1855 | Trino `levenshteinLte` | chSamples JOIN samples, `chSamples.name levenshteinLte { text: 'Alphb', maxDistance: 2 }` | 1 row — `levenshtein_distance()` |
-
-#### 19.2.2 Array Operators
-
-| ID | Test | Definition | Assertions |
-|---|---|---|---|
-| C1856 | Trino `arrayContains` string[] | chSamples JOIN samples, `chSamples.tags arrayContains 'fast'` | 3 rows — `contains()` function |
-| C1857 | Trino `arrayContainsAll` | chSamples JOIN samples, `chSamples.tags arrayContainsAll ['fast', 'new']` | 2 rows — `cardinality(array_except(...)) = 0` |
-| C1858 | Trino `arrayContainsAny` | chSamples JOIN samples, `chSamples.tags arrayContainsAny ['slow', 'new']` | 3 rows — `arrays_overlap()` |
-| C1859 | Trino `arrayIsEmpty` | chSamples JOIN samples, `chSamples.scores arrayIsEmpty` | 1 row — `cardinality(col) = 0` |
-| C1860 | Trino `arrayIsNotEmpty` | chSamples JOIN samples, `chSamples.scores arrayIsNotEmpty` | 3 rows — `cardinality(col) > 0` |
-| C1861 | Trino `arrayContains` int[] | chSamples JOIN samples, `chSamples.scores arrayContains 1` | 2 rows |
-
-#### 19.2.3 Filter Groups & Column Filter
-
-| ID | Test | Definition | Assertions |
-|---|---|---|---|
-| C1862 | Trino OR filter group | chSamples JOIN samples, `(chSamples.status = 'active' OR chSamples.status = 'paid')` | 3 rows |
-| C1863 | Trino NOT filter group | chSamples JOIN samples, `NOT (chSamples.status = 'cancelled')` | 4 rows |
-| C1864 | Trino column-vs-column | chSamples JOIN samples, `chSamples.amount > chSamples.discount` (QueryColumnFilter) | 3 rows |
-
-#### 19.2.4 Aggregation, GROUP BY, HAVING
-
-| ID | Test | Definition | Assertions |
-|---|---|---|---|
-| C1865 | Trino COUNT(*) | chSamples JOIN samples, COUNT(*) as cnt | `cnt >= 5` |
-| C1866 | Trino SUM + GROUP BY | chSamples JOIN samples, groupBy: [chSamples.status], SUM(chSamples.amount) as totalAmt | grouped sums |
-| C1867 | Trino HAVING | chSamples JOIN samples GROUP BY status, SUM(amount) as totalAmt, HAVING totalAmt > 100 | only qualifying groups |
-| C1868 | Trino AVG | chSamples JOIN samples, AVG(chSamples.amount) as avgAmt | decimal result |
-
-#### 19.2.5 ORDER BY, LIMIT, DISTINCT, byIds
-
-| ID | Test | Definition | Assertions |
-|---|---|---|---|
-| C1869 | Trino ORDER BY + LIMIT + OFFSET | chSamples JOIN samples, orderBy: chSamples.amount asc, limit: 2, offset: 1 | 2 rows |
-| C1870 | Trino DISTINCT | chSamples JOIN samples, columns: [chSamples.status], distinct: true | 4 unique statuses |
-| C1871 | Trino byIds | chSamples JOIN samples, `byIds: [1, 2]` on chSamples | 2 rows — `IN (?, ?)` |
-
----
-
 ## Implementation Checklist
 
 For implementation developers, verify the following groups pass in order:
@@ -1234,13 +1148,13 @@ For implementation developers, verify the following groups pass in order:
 2. **Health Check** (C1300-C1304) — server is running and connected
 3. **Execute Modes** (C001-C027) — basic response shapes, sql-only, count
 4. **Debug Mode** (C030-C034) — debug logging works
-5. **Filtering** (C100-C196) — all 31 operators + groups + qualifiers
-6. **Joins** (C200-C207) — left/inner, multi-table, column selection
-7. **Aggregations** (C300-C310) — all 5 functions, groupBy interaction, NULLs
-8. **GROUP BY & HAVING** (C320-C329) — grouping, HAVING conditions, joined column
-9. **ORDER BY, LIMIT, OFFSET, DISTINCT** (C400-C407) — pagination + sorting
-10. **byIds** (C500-C507) — primary key shortcut, rejection of composite PK, filter/sql-only combos
-11. **EXISTS** (C600-C613) — subqueries, all 6 counted operators, self-referencing, join combo
+5. **Filtering** (C100-C196 × 3 dialects) — all 31 operators + groups + qualifiers
+6. **Joins** (C200-C207 × 3 dialects) — left/inner, multi-table, column selection, collision
+7. **Aggregations** (C300-C310 × 3 dialects) — all 5 functions, groupBy interaction, NULLs
+8. **GROUP BY & HAVING** (C320-C329 × 3 dialects) — grouping, HAVING conditions, joined column
+9. **ORDER BY, LIMIT, OFFSET, DISTINCT** (C400-C407 × 3 dialects) — pagination + sorting
+10. **byIds** (C500-C507 × 3 dialects, C505 pg-only) — primary key shortcut, composite PK rejection
+11. **EXISTS** (C600-C613 × 3 dialects) — subqueries, all 6 counted operators, self-referencing, nested, join combo
 12. **Access Control** (C700-C723) — roles, scopes, intersection, joined table access
 13. **Masking** (C800-C816) — all 8 masking functions (+ null pass-through), multi-role, cross-scope
 14. **Validation Errors** (C900-C1030) — all 14 rules verified (via /query)
@@ -1252,9 +1166,8 @@ For implementation developers, verify the following groups pass in order:
 20. **Lifecycle** (C1310-C1313) — reload metadata/roles, close
 21. **SQL Injection** (C1400-C1465) — per-dialect parameterization, identifier validation, alias escaping, enum-keyword validation
 22. **Edge Cases** (C1700-C1716) — nulls, types, strategies, freshness, distinct+count, empty groups
-23. **Per-Dialect Operators** (C1800-C1871) — ClickHouse and Trino correctness via mirror tables
 
-Total: **465 contract tests**
+Total: **401 unique test IDs** × parameterization = ~**590 test executions** (sections 3–9: 95 IDs × 3 dialects + C505 × 1 = 286; other sections: 306 × 1 = 306; total ≈ 592)
 
 ---
 
@@ -1268,3 +1181,4 @@ Total: **465 contract tests**
 - **Meta consistency:** `meta.columns` must accurately reflect the actual keys in `data[]` rows. If column names are qualified due to collisions (e.g. `orders.id`), `meta.columns[].apiName` must match the qualified key.
 - **Seed data:** Use the exact seed data from the [Fixture](#fixture) section. Assertions on row counts and values depend on this data.
 - **Validation endpoints:** `/validate/query` and `/validate/config` must run pure validation logic with zero I/O. They share the same error format as `/query`. Implementation developers should start with validation endpoint tests (section 17) — they require no database and provide fast feedback on metadata handling.
+- **Dialect parameterization:** Sections 3–9 must be implemented as parameterized tests that run each test ID three times — once per dialect (pg/ch/trino). See the [Parameterization](#parameterization) header in section 3 for table substitution rules.
