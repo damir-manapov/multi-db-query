@@ -13,14 +13,7 @@ export interface QueryContract {
 const admin: ExecutionContext = { roles: { user: ['admin'] } }
 const tenantUser: ExecutionContext = { roles: { user: ['tenant-user'] } }
 const analyst: ExecutionContext = { roles: { user: ['analyst'] } }
-// @ts-expect-error reserved for future contract tests
-const _viewer: ExecutionContext = { roles: { user: ['viewer'] } }
 const noAccess: ExecutionContext = { roles: { user: ['no-access'] } }
-// Reserved for future service-scoped tests
-// @ts-expect-error reserved for future contract tests
-const _ordersService: ExecutionContext = { roles: { user: ['admin'], service: ['orders-service'] } }
-// @ts-expect-error reserved for future contract tests
-const _reportingService: ExecutionContext = { roles: { user: ['admin'], service: ['reporting-service'] } }
 
 function hasErrorCode(err: unknown, code: string): boolean {
   if (err instanceof ValidationError) {
@@ -256,6 +249,9 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           context: admin,
         })
         expect(r.kind).toBe('count')
+        if (r.kind === 'count') {
+          expect(r.count).toBeGreaterThanOrEqual(5) // scalar count, not number of groups (4)
+        }
       })
 
       it('C024: count ignores orderBy, limit, offset', async () => {
@@ -475,7 +471,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         }
       })
 
-      it.skip('C723: one scope with zero roles (negative)', async () => {
+      it('C723: one scope with zero roles (negative)', async () => {
         await expectValidationError(
           engine,
           { from: 'orders' },
@@ -1070,7 +1066,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         )
       })
 
-      it.skip('C947: levenshteinLte missing text field', async () => {
+      it('C947: levenshteinLte missing text field', async () => {
         await expectValidationError(
           engine,
           { from: 'users', filters: [{ column: 'firstName', operator: 'levenshteinLte', value: { maxDistance: 2 } }] },
@@ -1080,7 +1076,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
       })
 
       // 12.4 Column Filter Validity
-      it.skip('C950: column filter type mismatch', async () => {
+      it('C950: column filter type mismatch', async () => {
         await expectValidationError(
           engine,
           { from: 'orders', filters: [{ column: 'total', operator: '>', refColumn: 'status' }] },
@@ -1117,8 +1113,8 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
       })
 
       // 12.5 Join Validity
-      it.skip('C960: join with no relation defined', async () => {
-        await expectValidationError(engine, { from: 'orders', joins: [{ table: 'invoices' }] }, admin, 'INVALID_JOIN')
+      it('C960: join with no relation defined', async () => {
+        await expectValidationError(engine, { from: 'products', joins: [{ table: 'invoices' }] }, admin, 'INVALID_JOIN')
       })
 
       it('C961: join to table with no role access', async () => {
@@ -1182,8 +1178,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             columns: ['status'],
             groupBy: [{ column: 'status' }],
             aggregations: [{ column: 'total', fn: 'sum', alias: 'totalSum' }],
-            // @ts-expect-error target API — not yet in types
-            having: [{ alias: 'nonexistent', operator: '>', value: 0 }],
+            having: [{ column: 'nonexistent', operator: '>', value: 0 }],
           },
           admin,
           'INVALID_HAVING',
@@ -1198,8 +1193,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             columns: ['status'],
             groupBy: [{ column: 'status' }],
             aggregations: [{ column: 'total', fn: 'sum', alias: 'totalSum' }],
-            // @ts-expect-error target API — not yet in types
-            having: [{ alias: 'totalSum', table: 'orders', operator: '>', value: 0 }],
+            having: [{ column: 'totalSum', table: 'orders', operator: '>', value: 0 }],
           },
           admin,
           'INVALID_HAVING',
@@ -1214,8 +1208,8 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             columns: ['status'],
             groupBy: [{ column: 'status' }],
             aggregations: [{ column: 'total', fn: 'sum', alias: 'x' }],
-            // @ts-expect-error target API — not yet in types
-            having: [{ alias: 'x', operator: '>', refColumn: 'total' }],
+            // @ts-expect-error intentional — QueryColumnFilter not allowed in having
+            having: [{ column: 'x', operator: '>', refColumn: 'total' }],
           },
           admin,
           'INVALID_HAVING',
@@ -1230,7 +1224,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             columns: ['status'],
             groupBy: [{ column: 'status' }],
             aggregations: [{ column: 'total', fn: 'sum', alias: 'x' }],
-            // @ts-expect-error target API — not yet in types
+            // @ts-expect-error intentional — QueryExistsFilter not allowed in having
             having: [{ table: 'products', exists: true }],
           },
           admin,
@@ -1246,8 +1240,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             columns: ['status'],
             groupBy: [{ column: 'status' }],
             aggregations: [{ column: 'total', fn: 'sum', alias: 'x' }],
-            // @ts-expect-error target API — not yet in types
-            having: [{ alias: 'x', operator: 'contains', value: 'abc' }],
+            having: [{ column: 'x', operator: 'contains', value: 'abc' }],
           },
           admin,
           'INVALID_HAVING',
@@ -1262,8 +1255,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             columns: ['status'],
             groupBy: [{ column: 'status' }],
             aggregations: [{ column: 'total', fn: 'sum', alias: 'x' }],
-            // @ts-expect-error target API — not yet in types
-            having: [{ alias: 'x', operator: 'levenshteinLte', value: { text: 'abc', maxDistance: 1 } }],
+            having: [{ column: 'x', operator: 'levenshteinLte', value: { text: 'abc', maxDistance: 1 } }],
           },
           admin,
           'INVALID_HAVING',
@@ -1278,8 +1270,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             columns: ['status'],
             groupBy: [{ column: 'status' }],
             aggregations: [{ column: 'total', fn: 'sum', alias: 'x' }],
-            // @ts-expect-error target API — not yet in types
-            having: [{ alias: 'x', operator: 'arrayContains', value: 1 }],
+            having: [{ column: 'x', operator: 'arrayContains', value: 1 }],
           },
           admin,
           'INVALID_HAVING',
@@ -1308,7 +1299,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
       it('C987: orderBy table references non-joined table', async () => {
         await expectValidationError(
           engine,
-          { from: 'orders', orderBy: [{ column: 'name', table: 'products', direction: 'asc' }] },
+          { from: 'orders', orderBy: [{ column: 'name', table: 'samples', direction: 'asc' }] },
           admin,
           'INVALID_ORDER_BY',
         )
@@ -1330,11 +1321,6 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C992: byIds scalar on composite PK', async () => {
         await expectValidationError(engine, { from: 'orderItems', byIds: [1, 2] }, admin, 'INVALID_BY_IDS')
-      })
-
-      it('C993: byIds missing key in composite PK', async () => {
-        // @ts-expect-error target API — not yet in types
-        await expectValidationError(engine, { from: 'orderItems', byIds: [{ orderId: 1 }] }, admin, 'INVALID_BY_IDS')
       })
 
       it('C994: byIds + groupBy', async () => {
@@ -1430,41 +1416,37 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
       })
 
       // 12.12 EXISTS Validity
-      it.skip('C1010: EXISTS on unrelated table', async () => {
+      it('C1010: EXISTS on unrelated table', async () => {
         await expectValidationError(
           engine,
-          // @ts-expect-error target API — not yet in types
-          { from: 'orders', exists: [{ table: 'invoices' }] },
+          { from: 'products', filters: [{ table: 'invoices' }] },
           admin,
           'INVALID_EXISTS',
         )
       })
 
-      it.skip('C1011: counted EXISTS with negative count value', async () => {
+      it('C1011: counted EXISTS with negative count value', async () => {
         await expectValidationError(
           engine,
-          // @ts-expect-error target API — not yet in types
-          { from: 'samples', exists: [{ table: 'sampleItems', count: { operator: '>=', value: -1 } }] },
+          { from: 'samples', filters: [{ table: 'sampleItems', count: { operator: '>=', value: -1 } }] },
           admin,
           'INVALID_EXISTS',
         )
       })
 
-      it.skip('C1012: counted EXISTS with fractional count value', async () => {
+      it('C1012: counted EXISTS with fractional count value', async () => {
         await expectValidationError(
           engine,
-          // @ts-expect-error target API — not yet in types
-          { from: 'samples', exists: [{ table: 'sampleItems', count: { operator: '>=', value: 1.5 } }] },
+          { from: 'samples', filters: [{ table: 'sampleItems', count: { operator: '>=', value: 1.5 } }] },
           admin,
           'INVALID_EXISTS',
         )
       })
 
-      it.skip('C1013: nested EXISTS invalid inner relation', async () => {
+      it('C1013: nested EXISTS invalid inner relation', async () => {
         await expectValidationError(
           engine,
-          // @ts-expect-error target API — not yet in types
-          { from: 'orders', exists: [{ table: 'products', exists: [{ table: 'users' }] }] },
+          { from: 'orders', filters: [{ table: 'products', filters: [{ table: 'users' }] }] },
           admin,
           'INVALID_EXISTS',
         )
@@ -1532,6 +1514,8 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         if (r.kind === 'data') {
           const ordersCols = r.meta.columns.filter((c) => c.fromTable === 'orders')
           expect(ordersCols.length).toBeGreaterThan(0)
+          const productsCols = r.meta.columns.filter((c) => c.fromTable === 'products')
+          expect(productsCols.length).toBeGreaterThan(0)
         }
       })
 
@@ -1550,6 +1534,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         if (r.kind === 'data') {
           const sumCol = r.meta.columns.find((c) => c.apiName === 'totalSum')
           expect(sumCol?.type).toBe('decimal')
+          expect(sumCol?.fromTable).toBe('orders')
           expect(sumCol?.masked).toBe(false)
           const cntCol = r.meta.columns.find((c) => c.apiName === 'cnt')
           expect(cntCol?.type).toBe('int')
@@ -1576,6 +1561,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         if (r.kind === 'data') {
           expect(r.meta.tablesUsed).toHaveLength(1)
           expect(r.meta.tablesUsed[0]?.tableId).toBe('orders')
+          expect(r.meta.tablesUsed[0]?.source).toBe('original')
           expect(r.meta.tablesUsed[0]?.database).toBe('pg-main')
         }
       })
@@ -2151,8 +2137,9 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           const r = await engine.query({
             definition: {
               from: samples,
-              // @ts-expect-error target API — not yet in types
-              filters: [{ logic: 'not', conditions: [{ column: 'status', operator: '=', value: 'cancelled' }] }],
+              filters: [
+                { logic: 'and', not: true, conditions: [{ column: 'status', operator: '=', value: 'cancelled' }] },
+              ],
             },
             context: admin,
           })
@@ -2203,8 +2190,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
                       logic: 'and',
                       conditions: [
                         { column: 'status', operator: '=', value: 'paid' },
-                        // @ts-expect-error target API — not yet in types
-                        { logic: 'not', conditions: [{ column: 'amount', operator: '<', value: 100 }] },
+                        { logic: 'and', not: true, conditions: [{ column: 'amount', operator: '<', value: 100 }] },
                       ],
                     },
                   ],
@@ -2564,8 +2550,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
               columns: ['status'],
               groupBy: [{ column: 'status' }],
               aggregations: [{ column: 'amount', fn: 'sum', alias: 'totalAmt' }],
-              // @ts-expect-error target API — not yet in types
-              having: [{ alias: 'totalAmt', operator: '>', value: 100 }],
+              having: [{ column: 'totalAmt', operator: '>', value: 100 }],
             },
             context: admin,
           })
@@ -2579,12 +2564,90 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
               columns: ['status'],
               groupBy: [{ column: 'status' }],
               aggregations: [{ column: 'amount', fn: 'sum', alias: 'totalAmt' }],
-              // @ts-expect-error target API — not yet in types
-              having: [{ alias: 'totalAmt', operator: 'between', value: { from: 100, to: 300 } }],
+              having: [{ column: 'totalAmt', operator: 'between', value: { from: 100, to: 300 } }],
             },
             context: admin,
           })
           if (r.kind === 'data') expect(r.data.length).toBe(2) // paid(200), shipped(150)
+        })
+
+        it('C323: HAVING with OR group', async () => {
+          const r = await engine.query({
+            definition: {
+              from: samples,
+              columns: ['status'],
+              groupBy: [{ column: 'status' }],
+              aggregations: [
+                { column: 'amount', fn: 'sum', alias: 'totalAmt' },
+                { column: 'amount', fn: 'avg', alias: 'avgAmt' },
+              ],
+              having: [
+                {
+                  logic: 'or',
+                  conditions: [
+                    { column: 'totalAmt', operator: '>', value: 250 },
+                    { column: 'avgAmt', operator: '>', value: 150 },
+                  ],
+                },
+              ],
+            },
+            context: admin,
+          })
+          if (r.kind === 'data') expect(r.data.length).toBe(2) // active(SUM 400>250), paid(AVG 200>150)
+        })
+
+        it('C325: HAVING with NOT BETWEEN', async () => {
+          const r = await engine.query({
+            definition: {
+              from: samples,
+              columns: ['status'],
+              groupBy: [{ column: 'status' }],
+              aggregations: [{ column: 'amount', fn: 'sum', alias: 'totalAmt' }],
+              having: [{ column: 'totalAmt', operator: 'notBetween', value: { from: 100, to: 300 } }],
+            },
+            context: admin,
+          })
+          if (r.kind === 'data') expect(r.data.length).toBe(2) // active(400), cancelled(50)
+        })
+
+        it('C326: HAVING with IS NULL', async () => {
+          const r = await engine.query({
+            definition: {
+              from: samples,
+              columns: ['status'],
+              groupBy: [{ column: 'status' }],
+              aggregations: [{ column: 'discount', fn: 'sum', alias: 'discountSum' }],
+              having: [{ column: 'discountSum', operator: 'isNull', value: null }],
+            },
+            context: admin,
+          })
+          if (r.kind === 'data') expect(r.data.length).toBe(1) // paid (all discounts null → SUM is null)
+        })
+
+        it('C327: NOT in HAVING group', async () => {
+          const r = await engine.query({
+            definition: {
+              from: samples,
+              columns: ['status'],
+              groupBy: [{ column: 'status' }],
+              aggregations: [
+                { column: 'amount', fn: 'sum', alias: 'totalAmt' },
+                { column: '*', fn: 'count', alias: 'cnt' },
+              ],
+              having: [
+                {
+                  logic: 'or',
+                  not: true,
+                  conditions: [
+                    { column: 'totalAmt', operator: '>', value: 100 },
+                    { column: 'cnt', operator: '>', value: 1 },
+                  ],
+                },
+              ],
+            },
+            context: admin,
+          })
+          if (r.kind === 'data') expect(r.data.length).toBe(1) // cancelled (SUM 50, COUNT 1)
         })
 
         it('C328: ORDER BY aggregation alias', async () => {
@@ -2631,8 +2694,11 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           if (r.kind === 'data' && r.data.length >= 2) {
             const amounts = r.data.map((row) => (row as Record<string, unknown>).amount as number)
             for (let i = 1; i < amounts.length; i++) {
-              // biome-ignore lint/style/noNonNullAssertion: array bounds verified by loop condition
-              expect(amounts[i]!).toBeGreaterThanOrEqual(amounts[i - 1]!)
+              const curr = amounts[i]
+              const prev = amounts[i - 1]
+              if (curr !== undefined && prev !== undefined) {
+                expect(curr).toBeGreaterThanOrEqual(prev)
+              }
             }
           }
         })
@@ -2645,8 +2711,11 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           if (r.kind === 'data' && r.data.length >= 2) {
             const amounts = r.data.map((row) => (row as Record<string, unknown>).amount as number)
             for (let i = 1; i < amounts.length; i++) {
-              // biome-ignore lint/style/noNonNullAssertion: array bounds verified by loop condition
-              expect(amounts[i]!).toBeLessThanOrEqual(amounts[i - 1]!)
+              const curr = amounts[i]
+              const prev = amounts[i - 1]
+              if (curr !== undefined && prev !== undefined) {
+                expect(curr).toBeLessThanOrEqual(prev)
+              }
             }
           }
         })
@@ -2662,7 +2731,34 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
-          if (r.kind === 'data') expect(r.data.length).toBe(5)
+          if (r.kind === 'data') {
+            expect(r.data.length).toBe(5)
+            const rows = r.data as Record<string, unknown>[]
+            // Verify primary sort: status ascending
+            const statuses = rows.map((row) => row.status as string)
+            const sortedStatuses = [...statuses].sort()
+            expect(statuses).toEqual(sortedStatuses)
+            // Verify secondary sort: within same status, amount descending
+            for (let i = 1; i < rows.length; i++) {
+              const curr = rows[i]
+              const prev = rows[i - 1]
+              if (curr !== undefined && prev !== undefined && curr.status === prev.status) {
+                expect(curr.amount as number).toBeLessThanOrEqual(prev.amount as number)
+              }
+            }
+          }
+        })
+
+        it('C403: ORDER BY joined column', async () => {
+          const r = await engine.query({
+            definition: {
+              from: samples,
+              joins: [{ table: sampleItems }],
+              orderBy: [{ column: 'category', table: sampleItems, direction: 'asc' }],
+            },
+            context: admin,
+          })
+          if (r.kind === 'data') expect(r.data.length).toBeGreaterThan(0)
         })
 
         it('C404: LIMIT', async () => {
@@ -2684,6 +2780,20 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             const statuses = new Set(r.data.map((row) => (row as Record<string, unknown>).status))
             expect(statuses.size).toBe(r.data.length)
           }
+        })
+
+        it('C407: DISTINCT + GROUP BY', async () => {
+          const r = await engine.query({
+            definition: {
+              from: samples,
+              columns: ['status'],
+              distinct: true,
+              groupBy: [{ column: 'status' }],
+              aggregations: [{ column: 'amount', fn: 'sum', alias: 'totalAmt' }],
+            },
+            context: admin,
+          })
+          if (r.kind === 'data') expect(r.data.length).toBe(4)
         })
       })
 
@@ -2751,6 +2861,10 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             expect(r.sql).toContain('WHERE')
           }
         })
+
+        it('C505: byIds rejects composite PK', async () => {
+          await expectValidationError(engine, { from: 'orderItems', byIds: [1, 2] }, admin, 'INVALID_BY_IDS')
+        })
       })
 
       // ── 9. EXISTS / NOT EXISTS ─────────────────────────────
@@ -2758,8 +2872,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
       describe('9. EXISTS', () => {
         it('C600: EXISTS filter', async () => {
           const r = await engine.query({
-            // @ts-expect-error target API — not yet in types
-            definition: { from: samples, exists: [{ table: sampleItems }] },
+            definition: { from: samples, filters: [{ table: sampleItems }] },
             context: admin,
           })
           if (r.kind === 'data') expect(r.data.length).toBe(4) // ids 1,2,3,5
@@ -2767,8 +2880,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
         it('C601: NOT EXISTS filter', async () => {
           const r = await engine.query({
-            // @ts-expect-error target API — not yet in types
-            definition: { from: samples, exists: [{ table: sampleItems, exists: false }] },
+            definition: { from: samples, filters: [{ table: sampleItems, exists: false }] },
             context: admin,
           })
           if (r.kind === 'data') expect(r.data.length).toBe(1) // id 4
@@ -2778,18 +2890,32 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           const r = await engine.query({
             definition: {
               from: samples,
-              // @ts-expect-error target API — not yet in types
-              exists: [{ table: sampleItems, filters: [{ column: 'status', operator: '=', value: 'paid' }] }],
+              filters: [{ table: sampleItems, filters: [{ column: 'status', operator: '=', value: 'paid' }] }],
             },
             context: admin,
           })
           if (r.kind === 'data') expect(r.data.length).toBe(2) // ids 2, 5
         })
 
+        it('C603: EXISTS inside OR group', async () => {
+          const r = await engine.query({
+            definition: {
+              from: samples,
+              filters: [
+                {
+                  logic: 'or',
+                  conditions: [{ column: 'status', operator: '=', value: 'cancelled' }, { table: sampleItems }],
+                },
+              ],
+            },
+            context: admin,
+          })
+          if (r.kind === 'data') expect(r.data.length).toBe(4) // ids 1,2,3,5
+        })
+
         it('C604: nested EXISTS', async () => {
           const r = await engine.query({
-            // @ts-expect-error target API — not yet in types
-            definition: { from: samples, exists: [{ table: sampleItems, exists: [{ table: sampleDetails }] }] },
+            definition: { from: samples, filters: [{ table: sampleItems, filters: [{ table: sampleDetails }] }] },
             context: admin,
           })
           if (r.kind === 'data') expect(r.data.length).toBe(3) // ids 1, 2, 5
@@ -2797,8 +2923,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
         it('C605: counted EXISTS (>=)', async () => {
           const r = await engine.query({
-            // @ts-expect-error target API — not yet in types
-            definition: { from: samples, exists: [{ table: sampleItems, count: { operator: '>=', value: 2 } }] },
+            definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '>=', value: 2 } }] },
             context: admin,
           })
           if (r.kind === 'data') expect(r.data.length).toBe(2) // ids 1, 5
@@ -2806,26 +2931,46 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
         it('C606: counted EXISTS (=)', async () => {
           const r = await engine.query({
-            // @ts-expect-error target API — not yet in types
-            definition: { from: samples, exists: [{ table: sampleItems, count: { operator: '=', value: 1 } }] },
+            definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '=', value: 1 } }] },
             context: admin,
           })
           if (r.kind === 'data') expect(r.data.length).toBe(2) // ids 2, 3
         })
 
+        it('C607: counted EXISTS ignores exists field', async () => {
+          const r = await engine.query({
+            definition: {
+              from: samples,
+              filters: [{ table: sampleItems, exists: false, count: { operator: '>=', value: 1 } }],
+            },
+            context: admin,
+          })
+          if (r.kind === 'data') expect(r.data.length).toBe(4) // ids 1,2,3,5 — count decides, not exists
+        })
+
         it('C608: self-referencing EXISTS', async () => {
           const r = await engine.query({
-            // @ts-expect-error target API — not yet in types
-            definition: { from: samples, exists: [{ table: samples }] },
+            definition: { from: samples, filters: [{ table: samples }] },
             context: admin,
           })
           if (r.kind === 'data') expect(r.data.length).toBe(2) // ids 1, 2 manage others
         })
 
+        it('C609: EXISTS with join', async () => {
+          const r = await engine.query({
+            definition: {
+              from: samples,
+              joins: [{ table: sampleItems }],
+              filters: [{ table: samples }],
+            },
+            context: admin,
+          })
+          if (r.kind === 'data') expect(r.data.length).toBeGreaterThan(0) // samples that manage others, with items
+        })
+
         it('C610: counted EXISTS (>)', async () => {
           const r = await engine.query({
-            // @ts-expect-error target API — not yet in types
-            definition: { from: samples, exists: [{ table: sampleItems, count: { operator: '>', value: 1 } }] },
+            definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '>', value: 1 } }] },
             context: admin,
           })
           if (r.kind === 'data') expect(r.data.length).toBe(2) // ids 1, 5
@@ -2833,8 +2978,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
         it('C611: counted EXISTS (<)', async () => {
           const r = await engine.query({
-            // @ts-expect-error target API — not yet in types
-            definition: { from: samples, exists: [{ table: sampleItems, count: { operator: '<', value: 2 } }] },
+            definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '<', value: 2 } }] },
             context: admin,
           })
           if (r.kind === 'data') expect(r.data.length).toBe(3) // ids 2, 3, 4
@@ -2842,8 +2986,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
         it('C612: counted EXISTS (!=)', async () => {
           const r = await engine.query({
-            // @ts-expect-error target API — not yet in types
-            definition: { from: samples, exists: [{ table: sampleItems, count: { operator: '!=', value: 0 } }] },
+            definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '!=', value: 0 } }] },
             context: admin,
           })
           if (r.kind === 'data') expect(r.data.length).toBe(4) // ids 1,2,3,5
@@ -2851,25 +2994,12 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
         it('C613: counted EXISTS (<=)', async () => {
           const r = await engine.query({
-            // @ts-expect-error target API — not yet in types
-            definition: { from: samples, exists: [{ table: sampleItems, count: { operator: '<=', value: 1 } }] },
+            definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '<=', value: 1 } }] },
             context: admin,
           })
           if (r.kind === 'data') expect(r.data.length).toBe(3) // ids 2, 3, 4
         })
       })
-    })
-
-    // ── C505: byIds rejects composite PK (pg-only) ──────────
-
-    it('C505: byIds rejects composite PK (pg-only)', async () => {
-      await expectValidationError(
-        engine,
-        // @ts-expect-error target API — not yet in types
-        { from: 'orderItems', byIds: [{ orderId: 1, productId: 'uuid-p1' }] },
-        admin,
-        'INVALID_BY_IDS',
-      )
     })
   })
 }

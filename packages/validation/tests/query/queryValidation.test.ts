@@ -221,6 +221,17 @@ describe('Rule 5 — Filter validity', () => {
     expect(err?.errors.some((e) => e.code === 'INVALID_VALUE')).toBe(true)
   })
 
+  it('#120b levenshteinLte missing text field', () => {
+    const idx = buildIndex()
+    const q: QueryDefinition = {
+      from: 'users',
+      filters: [{ column: 'firstName', operator: 'levenshteinLte', value: { maxDistance: 2 } }],
+    }
+    const err = validateQuery(q, adminCtx, idx, allRoles)
+    expect(err).not.toBeNull()
+    expect(err?.errors.some((e) => e.code === 'INVALID_VALUE')).toBe(true)
+  })
+
   it('#139 comparison on uuid rejected', () => {
     const idx = buildIndex()
     const q: QueryDefinition = {

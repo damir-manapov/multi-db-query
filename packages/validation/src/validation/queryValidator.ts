@@ -629,6 +629,13 @@ function validateCompoundValue(
       return
     }
     const v = value as Record<string, unknown>
+    if (typeof v.text !== 'string' || v.text.length === 0) {
+      errors.push({
+        code: 'INVALID_VALUE',
+        message: 'levenshteinLte requires a non-empty text string',
+        details: { column, operator, filterIndex },
+      })
+    }
     if (typeof v.maxDistance !== 'number' || !Number.isInteger(v.maxDistance) || v.maxDistance < 0) {
       errors.push({
         code: 'INVALID_VALUE',

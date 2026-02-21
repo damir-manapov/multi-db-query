@@ -590,7 +590,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 |---|---|---|---|
 | C320 | GROUP BY single column | samples, groupBy: [status], columns: [status] | 4 distinct statuses (active, paid, cancelled, shipped) |
 | C321 | GROUP BY with multi-column | samples, groupBy: [status, isActive], columns: [status, isActive], COUNT(*) | grouped by both |
-| C322 | HAVING single condition | samples GROUP BY status, SUM(amount) as totalAmt, `having: [{ alias: 'totalAmt', operator: '>', value: 100 }]` | 3 groups: active (400), paid (200), shipped (150) |
+| C322 | HAVING single condition | samples GROUP BY status, SUM(amount) as totalAmt, `having: [{ column: 'totalAmt', operator: '>', value: 100 }]` | 3 groups: active (400), paid (200), shipped (150) |
 | C323 | HAVING with OR group | samples GROUP BY status, HAVING `(SUM(amount) > 250 OR AVG(amount) > 150)` | 2 groups: active (SUM 400 > 250) and paid (AVG 200 > 150) |
 | C324 | HAVING with BETWEEN | samples GROUP BY status, SUM(amount) as totalAmt, HAVING `totalAmt between { from: 100, to: 300 }` | 2 groups: paid (200) and shipped (150) |
 | C325 | HAVING with NOT BETWEEN | samples GROUP BY status, SUM(amount) as totalAmt, HAVING `totalAmt notBetween { from: 100, to: 300 }` | 2 groups: active (400) and cancelled (50) |
@@ -625,7 +625,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C502 | byIds with count mode | samples, `byIds: [1, 2, 3]`, `executeMode: 'count'` | `kind === 'count'`; `count === 3` |
 | C503 | byIds with join | samples, `byIds: [1, 2]`, join sampleItems | id + sampleItem data returned |
 | C504 | byIds with column selection | samples, `byIds: [1]`, columns: [id, status] | only selected columns returned |
-| C505 | byIds rejects composite PK **(negative, pg-only)** | orderItems, `byIds: [{ orderId: 1, productId: 'uuid-p1' }]`, admin | `ValidationError` with `INVALID_BY_IDS` — byIds requires a single-column primary key; **not parameterized** |
+| C505 | byIds rejects composite PK **(negative, pg-only)** | orderItems, `byIds: [1, 2]`, admin | `ValidationError` with `INVALID_BY_IDS` — byIds requires a single-column primary key; **not parameterized** |
 | C506 | byIds with filter | samples, `byIds: [1, 2, 3]`, `filters: [{ column: 'status', operator: '=', value: 'active' }]`, admin | returns only id=1 (active); id=2 is 'paid', id=3 is 'cancelled' |
 | C507 | byIds with sql-only | samples, `byIds: [1, 2]`, `executeMode: 'sql-only'`, admin | `kind === 'sql'`; `sql` contains `'WHERE'`; `params` includes primary key values |
 
@@ -642,7 +642,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C604 | Nested EXISTS | samples WHERE EXISTS sampleItems WHERE EXISTS sampleDetails (2-hop chain) | 3 rows (ids 1, 2, 5 — samples whose items have details) |
 | C605 | Counted EXISTS (>=) | samples WHERE EXISTS sampleItems `count: { operator: '>=', value: 2 }` | 2 rows (ids 1, 5 — each has 2 items) |
 | C606 | Counted EXISTS (=) | samples WHERE EXISTS sampleItems `count: { operator: '=', value: 1 }` | 2 rows (ids 2, 3 — each has exactly 1 item) |
-| C607 | Counted EXISTS ignores `exists` field | samples, `exists: false`, `count: { operator: '>=', value: 1 }` | `exists` is ignored — counted subquery decides direction |
+| C607 | Counted EXISTS ignores `exists` field | samples, `filters: [{ table: sampleItems, exists: false, count: { operator: '>=', value: 1 } }]` | `exists` is ignored when `count` present — counted subquery decides; 4 rows (ids 1,2,3,5) |
 | C608 | Self-referencing EXISTS | samples WHERE EXISTS samples (via managerId → samples.id) | 2 rows (ids 1, 2 — they manage other samples) |
 | C609 | EXISTS with join | samples JOIN sampleItems WHERE EXISTS samples (via managerId) | samples that manage others, with item data included |
 | C610 | Counted EXISTS (>) | samples WHERE EXISTS sampleItems `count: { operator: '>', value: 1 }` | 2 rows (ids 1, 5 — each has > 1 items) |
@@ -821,7 +821,6 @@ All tests in this section expect the query to throw `ValidationError` with `code
 | C990 | Empty byIds array | `INVALID_BY_IDS` |
 | C991 | byIds + aggregations | `INVALID_BY_IDS` |
 | C992 | byIds scalar on composite PK: orderItems, `byIds: [1, 2]` (scalar values) | `INVALID_BY_IDS` |
-| C993 | byIds missing key in composite PK: orderItems, `byIds: [{ orderId: 1 }]` | `INVALID_BY_IDS` |
 | C994 | byIds + groupBy | `INVALID_BY_IDS` |
 
 ### 12.10 Limit/Offset Validity
@@ -984,14 +983,14 @@ Enum-like fields (`direction`, `fn`, `operator`, `logic`) are constrained by Typ
 | C1404 | Column name injection (`"` payload) | `POST /validate/query`: orders, `columns: ['id"; DROP TABLE orders; --']` | `UNKNOWN_COLUMN` validation error (rejected before SQL generation) |
 | C1418 | Column name injection (`` ` `` payload) | `POST /validate/query`: events, `columns: ['id`; DROP TABLE events; --']` | `UNKNOWN_COLUMN` validation error |
 | C1405 | Table name injection | `POST /validate/query`: `from: 'orders; DROP TABLE orders'` | `UNKNOWN_TABLE` validation error |
-| C1411 | EXISTS table name injection | `POST /validate/query`: orders with `exists: { table: "users; DROP TABLE users", on: { left: 'customerId', right: 'id' } }` | `UNKNOWN_TABLE` validation error |
+| C1411 | EXISTS table name injection | `POST /validate/query`: orders with `filters: [{ table: "users; DROP TABLE users" }]` | `UNKNOWN_TABLE` validation error |
 | C1421 | Column name on cross-DB table | `POST /validate/query`: events JOIN users, `columns: ['id"; DROP TABLE users; --']` on users side | `UNKNOWN_COLUMN` validation error |
 | C1460 | ORDER BY direction injection | `POST /validate/query`: orders, `orderBy: [{ column: 'id', direction: 'asc; DROP TABLE orders;--' }]` | validation error — `direction` must be `'asc'` or `'desc'` (rejected before SQL generation) |
 | C1461 | Aggregation function name injection | `POST /validate/query`: orders, `aggregations: [{ column: 'total', fn: 'sum); DROP TABLE orders;--', alias: 'x' }]` | validation error — `fn` must be one of `count`, `sum`, `avg`, `min`, `max` |
 | C1462 | Column filter operator injection | `POST /validate/query`: orders, `filters: [{ column: 'id', operator: ') OR 1=1 --', refColumn: 'customerId' }]` | validation error — column-filter `operator` must be one of `=`, `!=`, `>`, `<`, `>=`, `<=` |
 | C1463 | Filter group logic injection | `POST /validate/query`: orders, `filters: [{ logic: 'and 1=1);--', conditions: [{ column: 'status', operator: '=', value: 'active' }] }]` | validation error — `logic` must be `'and'` or `'or'` |
-| C1464 | EXISTS count operator injection | `POST /validate/query`: orders, `exists: { table: 'users', on: { left: 'customerId', right: 'id' }, count: { operator: ') UNION SELECT 1;--', value: 1 } }` | validation error — `count.operator` must be one of `=`, `!=`, `>`, `<`, `>=`, `<=` |
-| C1465 | HAVING group logic injection | `POST /validate/query`: orders, `aggregations: [{ column: 'total', fn: 'sum', alias: 'x' }]`, `groupBy: ['status']`, `having: [{ logic: 'or 1=1);--', conditions: [{ alias: 'x', operator: '>', value: 0 }] }]` | validation error — HAVING `logic` must be `'and'` or `'or'` |
+| C1464 | EXISTS count operator injection | `POST /validate/query`: orders, `filters: [{ table: 'users', count: { operator: ') UNION SELECT 1;--', value: 1 } }]` | validation error — `count.operator` must be one of `=`, `!=`, `>`, `<`, `>=`, `<=` |
+| C1465 | HAVING group logic injection | `POST /validate/query`: orders, `aggregations: [{ column: 'total', fn: 'sum', alias: 'x' }]`, `groupBy: ['status']`, `having: [{ logic: 'or 1=1);--', conditions: [{ column: 'x', operator: '>', value: 0 }] }]` | validation error — HAVING `logic` must be `'and'` or `'or'` |
 
 ### 16.2 Aggregation Alias Injection (all dialects)
 
@@ -1001,13 +1000,13 @@ Aggregation aliases are user-provided strings interpolated into SQL as quoted id
 |---|---|---|---|
 | C1412 | PG alias with double-quote injection | orders, `aggregations: [{ column: 'total', fn: 'sum', alias: 'x"; DROP TABLE orders;--' }]` | `INVALID_AGGREGATION` validation error **or** alias safely escaped in generated SQL; no SQL injection |
 | C1413 | PG alias with backtick injection | orders, `aggregations: [{ column: 'total', fn: 'sum', alias: 'x`; DROP TABLE orders;--' }]` | same: rejected or escaped; no injection |
-| C1414 | PG HAVING referencing injected alias | orders, `aggregations: [{ column: 'total', fn: 'sum', alias: 'x"; --' }]`, `having: [{ alias: 'x"; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in HAVING clause |
+| C1414 | PG HAVING referencing injected alias | orders, `aggregations: [{ column: 'total', fn: 'sum', alias: 'x"; --' }]`, `having: [{ column: 'x"; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in HAVING clause |
 | C1415 | PG ORDER BY referencing injected alias | orders, `aggregations: [{ column: 'total', fn: 'sum', alias: 'x"; --' }]`, `orderBy: [{ column: 'x"; --', direction: 'asc' }]` | rejected or escaped; no injection in ORDER BY clause |
 | C1419 | CH alias with backtick injection | events, `aggregations: [{ column: 'timestamp', fn: 'count', alias: 'x`; DROP TABLE events;--' }]` | rejected or backtick escaped in `` `alias` `` quoting; no injection |
-| C1448 | CH HAVING referencing backtick-injected alias | events, `aggregations: [{ column: 'timestamp', fn: 'count', alias: 'x`; --' }]`, `having: [{ alias: 'x`; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in `` `alias` `` HAVING clause |
+| C1448 | CH HAVING referencing backtick-injected alias | events, `aggregations: [{ column: 'timestamp', fn: 'count', alias: 'x`; --' }]`, `having: [{ column: 'x`; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in `` `alias` `` HAVING clause |
 | C1449 | CH ORDER BY referencing backtick-injected alias | events, `aggregations: [{ column: 'timestamp', fn: 'count', alias: 'x`; --' }]`, `orderBy: [{ column: 'x`; --', direction: 'asc' }]` | rejected or escaped; no injection in `` `alias` `` ORDER BY clause |
 | C1422 | Trino alias with double-quote injection | events JOIN users (cross-DB), `aggregations: [{ column: 'id', table: 'users', fn: 'count', alias: 'x"; DROP TABLE users;--' }]` | rejected or double-quote escaped; no injection |
-| C1450 | Trino HAVING referencing injected alias | events JOIN users, `aggregations: [{ column: 'id', table: 'users', fn: 'count', alias: 'x"; --' }]`, `having: [{ alias: 'x"; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in Trino HAVING clause |
+| C1450 | Trino HAVING referencing injected alias | events JOIN users, `aggregations: [{ column: 'id', table: 'users', fn: 'count', alias: 'x"; --' }]`, `having: [{ column: 'x"; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in Trino HAVING clause |
 | C1451 | Trino ORDER BY referencing injected alias | events JOIN users, `aggregations: [{ column: 'id', table: 'users', fn: 'count', alias: 'x"; --' }]`, `orderBy: [{ column: 'x"; --', direction: 'asc' }]` | rejected or escaped; no injection in Trino ORDER BY clause |
 
 ### 16.3 PostgreSQL Filter Value Injection
@@ -1167,7 +1166,7 @@ For implementation developers, verify the following groups pass in order:
 21. **SQL Injection** (C1400-C1465) — per-dialect parameterization, identifier validation, alias escaping, enum-keyword validation
 22. **Edge Cases** (C1700-C1716) — nulls, types, strategies, freshness, distinct+count, empty groups
 
-Total: **401 unique test IDs** × parameterization = ~**627 test executions** (sections 3–9: 113 IDs × 3 dialects + C505 × 1 = 340; other sections: 287 × 1 = 287; total = 627)
+Total: **400 unique test IDs** × parameterization = ~**626 test executions** (sections 3–9: 113 IDs × 3 dialects + C505 × 1 = 340; other sections: 286 × 1 = 286; total = 626)
 
 ---
 

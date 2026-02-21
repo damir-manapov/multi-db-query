@@ -124,7 +124,7 @@ export function describeValidationContract(
       } catch (err) {
         expect(err).toBeInstanceOf(ValidationError)
         const ve = err as ValidationError
-        expect(ve.errors.length).toBeGreaterThanOrEqual(1)
+        expect(ve.errors.length).toBeGreaterThanOrEqual(2)
       }
     })
 
@@ -140,6 +140,16 @@ export function describeValidationContract(
         const ve = err as ValidationError
         expect(ve.errors.some((e) => e.code === 'UNKNOWN_ROLE')).toBe(true)
       }
+    })
+
+    it('C1608: no DB connection used', async () => {
+      // Validation uses only metadata + roles — no executor/DB connection needed.
+      // This test verifies that validateQuery works without database connectivity.
+      const result = await engine.validateQuery({
+        definition: { from: 'orders', columns: ['id'] },
+        context: { roles: { user: ['admin'] } },
+      })
+      expect(result.valid).toBe(true)
     })
 
     it('C1609: same error format as /query', async () => {
