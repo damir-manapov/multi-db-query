@@ -783,11 +783,13 @@ These tests verify that errors transmitted over HTTP are properly reconstructed 
 
 ## 16. SQL Injection Resistance
 
-These tests verify that user-provided inputs — filter values, column/table names, aggregation aliases, and subquery references — cannot inject SQL across **all three dialects** (PostgreSQL, ClickHouse, Trino). Each test sends a malicious value and asserts the query either succeeds safely (value treated as data, not code) or is properly rejected with a validation error.
+These tests verify that user-provided inputs — filter values, column/table names, aggregation aliases, enum-like keywords, and subquery references — cannot inject SQL across **all three dialects** (PostgreSQL, ClickHouse, Trino). Each test sends a malicious value and asserts the query either succeeds safely (value treated as data, not code) or is properly rejected with a validation error.
 
 ### 16.1 Identifier & Structural Injection (dialect-agnostic)
 
-Column names, table names, and EXISTS references are validated against metadata **before** reaching any dialect's SQL generator. These tests can run via `POST /validate/query` (no database connection needed) — the validation layer rejects them identically regardless of which dialect would have been used. The table names in definitions (`orders`, `users`) only need to exist in metadata; no SQL is ever generated.
+Column names, table names, EXISTS references, and **enum-like keyword fields** (ORDER BY direction, aggregation function name, column-filter operator, filter group logic, EXISTS count operator) are validated **before** reaching any dialect's SQL generator. These tests can run via `POST /validate/query` (no database connection needed) — the validation layer rejects them identically regardless of which dialect would have been used.
+
+Enum-like fields (`direction`, `fn`, `operator`, `logic`) are constrained by TypeScript types at compile time, but conforming implementations **must** also validate them at runtime — raw JSON payloads bypass type constraints, and these fields are interpolated directly into SQL (not parameterized). A malicious HTTP client sending `{ direction: "asc; DROP TABLE orders;--" }` would inject SQL if the value is not validated.
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
@@ -796,6 +798,12 @@ Column names, table names, and EXISTS references are validated against metadata 
 | C1405 | Table name injection | `POST /validate/query`: `from: 'orders; DROP TABLE orders'` | `UNKNOWN_TABLE` validation error |
 | C1411 | EXISTS table name injection | `POST /validate/query`: orders with `exists: { table: "users; DROP TABLE users", on: { left: 'customerId', right: 'id' } }` | `UNKNOWN_TABLE` validation error |
 | C1421 | Column name on cross-DB table | `POST /validate/query`: events JOIN users, `columns: ['id"; DROP TABLE users; --']` on users side | `UNKNOWN_COLUMN` validation error |
+| C1460 | ORDER BY direction injection | `POST /validate/query`: orders, `orderBy: [{ column: 'id', direction: 'asc; DROP TABLE orders;--' }]` | validation error — `direction` must be `'asc'` or `'desc'` (rejected before SQL generation) |
+| C1461 | Aggregation function name injection | `POST /validate/query`: orders, `aggregations: [{ column: 'total', fn: 'sum); DROP TABLE orders;--', alias: 'x' }]` | validation error — `fn` must be one of `count`, `sum`, `avg`, `min`, `max` |
+| C1462 | Column filter operator injection | `POST /validate/query`: orders, `filters: [{ column: 'id', operator: ') OR 1=1 --', refColumn: 'customerId' }]` | validation error — column-filter `operator` must be one of `=`, `!=`, `>`, `<`, `>=`, `<=` |
+| C1463 | Filter group logic injection | `POST /validate/query`: orders, `filters: [{ logic: 'and 1=1);--', conditions: [{ column: 'status', operator: '=', value: 'active' }] }]` | validation error — `logic` must be `'and'` or `'or'` |
+| C1464 | EXISTS count operator injection | `POST /validate/query`: orders, `exists: { table: 'users', on: { left: 'customerId', right: 'id' }, count: { operator: ') UNION SELECT 1;--', value: 1 } }` | validation error — `count.operator` must be one of `=`, `!=`, `>`, `<`, `>=`, `<=` |
+| C1465 | HAVING group logic injection | `POST /validate/query`: orders, `aggregations: [{ column: 'total', fn: 'sum', alias: 'x' }]`, `groupBy: ['status']`, `having: [{ logic: 'or 1=1);--', conditions: [{ alias: 'x', operator: '>', value: 0 }] }]` | validation error — HAVING `logic` must be `'and'` or `'or'` |
 
 ### 16.2 Aggregation Alias Injection (all dialects)
 
@@ -958,10 +966,10 @@ For implementation developers, verify the following groups pass in order:
 14. **Validation Errors** (C900-C1030) — all 14 rules verified (via /query)
 15. **Meta Verification** (C1100-C1108) — response metadata correctness
 16. **Error Deserialization** (C1200-C1205) — HTTP error transport
-17. **SQL Injection** (C1400-C1459) — per-dialect parameterization, identifier validation, alias escaping
+17. **SQL Injection** (C1400-C1465) — per-dialect parameterization, identifier validation, alias escaping, enum-keyword validation
 18. **Edge Cases** (C1700-C1714) — nulls, types, strategies, distinct+count, empty groups
 
-Total: **342 contract tests**
+Total: **348 contract tests**
 
 ---
 
