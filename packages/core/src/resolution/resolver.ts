@@ -480,7 +480,7 @@ class ResolutionContext {
       column: colRef,
       operator: op,
       paramIndex: this.addParam(filter.value),
-      columnType: op === 'in' || op === 'notIn' ? col.type.replace('[]', '') : undefined,
+      columnType: col.type.replace('[]', ''),
     }
   }
 

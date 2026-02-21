@@ -1,0 +1,46 @@
+import type {
+  WhereArrayCondition,
+  WhereBetween,
+  WhereColumnCondition,
+  WhereCountedSubquery,
+  WhereExists,
+  WhereFunction,
+  WhereGroup,
+  WhereNode,
+} from '../types/ir.js'
+
+// ── WhereNode type guards (shared across all dialects) ─────────
+
+export function isGroup(n: WhereNode): n is WhereGroup {
+  return 'logic' in n && 'conditions' in n
+}
+
+export function isExists(n: WhereNode): n is WhereExists {
+  return 'exists' in n && 'subquery' in n
+}
+
+export function isCounted(n: WhereNode): n is WhereCountedSubquery {
+  return 'countParamIndex' in n && 'subquery' in n
+}
+
+export function isColCond(n: WhereNode): n is WhereColumnCondition {
+  return 'leftColumn' in n && 'rightColumn' in n
+}
+
+export function isFn(n: WhereNode): n is WhereFunction {
+  return 'fn' in n && 'fnParamIndex' in n
+}
+
+export function isBetween(n: WhereNode): n is WhereBetween {
+  return 'fromParamIndex' in n && 'toParamIndex' in n && !('alias' in n)
+}
+
+export function isArrayCond(n: WhereNode): n is WhereArrayCondition {
+  return 'elementType' in n
+}
+
+// ── Shared SQL helpers ─────────────────────────────────────────
+
+export function escapeLike(value: string): string {
+  return value.replace(/[%_\\]/g, '\\$&')
+}

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { MetadataIndex } from '../src/metadataIndex.js'
-import type { ExecutionContext } from '../src/types/context.js'
-import type { MetadataConfig, RoleMeta } from '../src/types/metadata.js'
-import type { QueryDefinition } from '../src/types/query.js'
-import { validateQuery } from '../src/validation/queryValidator.js'
-import { eventsTable, ordersTable, usersTable, validConfig } from './fixtures/testConfig.js'
+import { MetadataIndex } from '../../src/metadataIndex.js'
+import type { ExecutionContext } from '../../src/types/context.js'
+import type { MetadataConfig, RoleMeta } from '../../src/types/metadata.js'
+import type { QueryDefinition } from '../../src/types/query.js'
+import { validateQuery } from '../../src/validation/queryValidator.js'
+import { eventsTable, ordersTable, usersTable, validConfig } from '../fixtures/testConfig.js'
 
 // --- Helpers ---
 
@@ -17,7 +17,7 @@ const viewerRole: RoleMeta = {
   id: 'viewer',
   tables: [
     { tableId: 'users', allowedColumns: ['id', 'name', 'email', 'age', 'createdAt'] },
-    { tableId: 'orders', allowedColumns: ['id', 'userId', 'amount', 'status', 'createdAt'] },
+    { tableId: 'orders', allowedColumns: ['id', 'userId', 'total', 'status', 'createdAt'] },
     { tableId: 'events', allowedColumns: ['id', 'userId', 'eventType', 'payload', 'createdAt', 'tags'] },
   ],
 }
@@ -203,7 +203,7 @@ describe('Rule 5 — Filter validity', () => {
     const idx = buildIndex()
     const q: QueryDefinition = {
       from: 'orders',
-      filters: [{ column: 'amount', operator: 'between', value: { from: 'abc', to: 'xyz' } }],
+      filters: [{ column: 'total', operator: 'between', value: { from: 'abc', to: 'xyz' } }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).not.toBeNull()
@@ -348,7 +348,7 @@ describe('Rule 5 — QueryColumnFilter', () => {
     const idx = buildIndex()
     const q: QueryDefinition = {
       from: 'orders',
-      filters: [{ column: 'amount', operator: '>', refColumn: 'amount' }],
+      filters: [{ column: 'total', operator: '>', refColumn: 'total' }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).toBeNull()
@@ -423,7 +423,7 @@ describe('Rule 7 — Group By validity', () => {
       from: 'orders',
       columns: ['status', 'userId'],
       groupBy: [{ column: 'status' }],
-      aggregations: [{ column: 'amount', fn: 'sum', alias: 'totalAmount' }],
+      aggregations: [{ column: 'total', fn: 'sum', alias: 'totalAmount' }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).not.toBeNull()
@@ -768,7 +768,7 @@ describe('Rule 14 — Aggregation validity', () => {
       groupBy: [{ column: 'status' }],
       aggregations: [
         { column: '*', fn: 'count', alias: 'cnt' },
-        { column: 'amount', fn: 'sum', alias: 'cnt' },
+        { column: 'total', fn: 'sum', alias: 'cnt' },
       ],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
@@ -802,7 +802,7 @@ describe('Rule 14 — Aggregation validity', () => {
     const q: QueryDefinition = {
       from: 'users',
       columns: [],
-      aggregations: [{ column: 'amount', table: 'orders', fn: 'sum', alias: 'total' }],
+      aggregations: [{ column: 'total', table: 'orders', fn: 'sum', alias: 'total' }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).not.toBeNull()
@@ -837,7 +837,7 @@ describe('Rule 14 — Aggregation validity', () => {
     const q: QueryDefinition = {
       from: 'orders',
       columns: [],
-      aggregations: [{ column: 'amount', fn: 'sum', alias: 'totalAmount' }],
+      aggregations: [{ column: 'total', fn: 'sum', alias: 'totalAmount' }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).toBeNull()
@@ -890,7 +890,7 @@ describe('Edge cases', () => {
         {
           table: 'orders',
           exists: true,
-          filters: [{ column: 'amount', operator: '>', value: 100 }],
+          filters: [{ column: 'total', operator: '>', value: 100 }],
         },
       ],
     }

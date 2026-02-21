@@ -7,7 +7,6 @@ import type {
   HavingNode,
   JoinClause,
   OrderByClause,
-  SqlDialect,
   SqlParts,
   TableRef,
   WhereArrayCondition,
@@ -20,6 +19,8 @@ import type {
   WhereGroup,
   WhereNode,
 } from '../types/ir.js'
+import { escapeLike, isArrayCond, isBetween, isColCond, isCounted, isExists, isFn, isGroup } from '../generator/fragments.js'
+import type { SqlDialect } from './dialect.js'
 
 // --- ClickHouse Dialect ---
 
@@ -142,14 +143,12 @@ class ChGenerator {
       return c.literal !== undefined ? `${col} ${op} ${c.literal}` : `${col} ${op}`
     }
 
-    // in / notIn — use Array param
+    // in / notIn — expand inline as IN tuple(v1, v2, ...)
     if (op === 'in') {
-      const chType = chArrayType(c.columnType)
-      return `${col} IN (${this.ref(c.paramIndex, chType)})`
+      return `${col} IN tuple(${this.expandTuple(c.paramIndex, c.columnType)})`
     }
     if (op === 'notIn') {
-      const chType = chArrayType(c.columnType)
-      return `${col} NOT IN (${this.ref(c.paramIndex, chType)})`
+      return `${col} NOT IN tuple(${this.expandTuple(c.paramIndex, c.columnType)})`
     }
 
     // Pattern: raw
@@ -172,8 +171,9 @@ class ChGenerator {
     if (op === 'notContains') return `${col} NOT LIKE ${this.pat(c.paramIndex, true, true)}`
     if (op === 'notIcontains') return `NOT ilike(${col}, ${this.pat(c.paramIndex, true, true)})`
 
-    // Standard comparison
-    return `${col} ${op} ${this.ref(c.paramIndex)}`
+    // Standard comparison — use column type when available
+    const chType = c.columnType !== undefined ? chColumnTypeMap(c.columnType) : undefined
+    return `${col} ${op} ${this.ref(c.paramIndex, chType)}`
   }
 
   // WhereColumnCondition
@@ -208,10 +208,10 @@ class ChGenerator {
     const idx = c.paramIndexes?.[0]
     if (idx === undefined) return `${col} IS NOT NULL`
 
-    if (op === 'contains') return `has(${col}, ${this.ref(idx)})`
-    if (op === 'containsAll') return `hasAll(${col}, ${this.ref(idx, chArrayType(c.elementType))})`
+    if (op === 'contains') return `has(${col}, ${this.refTyped(idx, chColumnTypeMap(c.elementType))})`
+    if (op === 'containsAll') return `hasAll(${col}, [${this.expandArrayElements(c.paramIndexes ?? [], c.elementType)}])`
     // containsAny
-    return `hasAny(${col}, ${this.ref(idx, chArrayType(c.elementType))})`
+    return `hasAny(${col}, [${this.expandArrayElements(c.paramIndexes ?? [], c.elementType)}])`
   }
 
   // WhereGroup
@@ -229,7 +229,7 @@ class ChGenerator {
 
   // WhereCountedSubquery
   private whereCounted(c: WhereCountedSubquery): string {
-    return `(${this.countSubquery(c.subquery, c.operator, c.countParamIndex)}) ${c.operator} ${this.ref(c.countParamIndex)}`
+    return `(${this.countSubquery(c.subquery, c.operator, c.countParamIndex)}) ${c.operator} ${this.refTyped(c.countParamIndex, 'UInt64')}`
   }
 
   // --- Subquery ---
@@ -320,37 +320,54 @@ class ChGenerator {
     const n = ++this.paramCounter
     return `{p${String(n)}:String}`
   }
+
+  /** Expand array param inline as individual typed tuple values */
+  private expandTuple(idx: number, elementType: string | undefined): string {
+    const value = this.input[idx]
+    if (!Array.isArray(value)) {
+      this.outParams.push(value)
+      const n = ++this.paramCounter
+      const type = chColumnTypeMap(elementType)
+      return `{p${String(n)}:${type}}`
+    }
+    const refs: string[] = []
+    const type = chColumnTypeMap(elementType)
+    for (const item of value) {
+      this.outParams.push(item)
+      const n = ++this.paramCounter
+      refs.push(`{p${String(n)}:${type}}`)
+    }
+    return refs.join(', ')
+  }
+
+  /** Expand array param indexes as individual typed elements for hasAll/hasAny */
+  private expandArrayElements(indexes: number[], elementType: string): string {
+    // Indexes may be a single index pointing to an array value
+    if (indexes.length === 1 && indexes[0] !== undefined) {
+      const value = this.input[indexes[0]]
+      if (Array.isArray(value)) {
+        const type = chColumnTypeMap(elementType)
+        const refs: string[] = []
+        for (const item of value) {
+          this.outParams.push(item)
+          const n = ++this.paramCounter
+          refs.push(`{p${String(n)}:${type}}`)
+        }
+        return refs.join(', ')
+      }
+    }
+    const type = chColumnTypeMap(elementType)
+    const refs: string[] = []
+    for (const idx of indexes) {
+      this.outParams.push(this.input[idx])
+      const n = ++this.paramCounter
+      refs.push(`{p${String(n)}:${type}}`)
+    }
+    return refs.join(', ')
+  }
 }
 
 // --- Type guards for WhereNode ---
-
-function isGroup(n: WhereNode): n is WhereGroup {
-  return 'logic' in n && 'conditions' in n
-}
-
-function isExists(n: WhereNode): n is WhereExists {
-  return 'exists' in n && 'subquery' in n
-}
-
-function isCounted(n: WhereNode): n is WhereCountedSubquery {
-  return 'countParamIndex' in n && 'subquery' in n
-}
-
-function isColCond(n: WhereNode): n is WhereColumnCondition {
-  return 'leftColumn' in n && 'rightColumn' in n
-}
-
-function isFn(n: WhereNode): n is WhereFunction {
-  return 'fn' in n && 'fnParamIndex' in n
-}
-
-function isBetween(n: WhereNode): n is WhereBetween {
-  return 'fromParamIndex' in n && 'toParamIndex' in n && !('alias' in n)
-}
-
-function isArrayCond(n: WhereNode): n is WhereArrayCondition {
-  return 'elementType' in n
-}
 
 // --- Helpers ---
 
@@ -364,10 +381,6 @@ function quoteTable(ref: TableRef): string {
   return `${quoted} AS \`${ref.alias}\``
 }
 
-function escapeLike(value: string): string {
-  return value.replace(/[%_\\]/g, '\\$&')
-}
-
 function chValueType(value: unknown): string {
   if (typeof value === 'number') {
     return Number.isInteger(value) ? 'Int32' : 'Float64'
@@ -377,16 +390,17 @@ function chValueType(value: unknown): string {
   return 'String'
 }
 
-function chArrayType(elementType: string | undefined): string {
-  if (elementType === undefined) return 'Array(String)'
+/** Map ColumnType → ClickHouse type name */
+function chColumnTypeMap(elementType: string | undefined): string {
+  if (elementType === undefined) return 'String'
   const map: Record<string, string> = {
-    uuid: 'Array(UUID)',
-    string: 'Array(String)',
-    int: 'Array(Int32)',
-    decimal: 'Array(Decimal)',
-    boolean: 'Array(Bool)',
-    date: 'Array(Date)',
-    datetime: 'Array(DateTime)',
+    uuid: 'UUID',
+    string: 'String',
+    int: 'Int32',
+    decimal: 'Decimal',
+    boolean: 'Bool',
+    date: 'Date',
+    timestamp: 'DateTime',
   }
-  return map[elementType] ?? 'Array(String)'
+  return map[elementType] ?? 'String'
 }

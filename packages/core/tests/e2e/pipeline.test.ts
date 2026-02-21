@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { CacheProvider, DbExecutor, ExecutionContext, MetadataConfig, RoleMeta } from '../src/index.js'
-import { ConfigError, ConnectionError, ExecutionError, staticMetadata, staticRoles } from '../src/index.js'
-import { createMultiDb } from '../src/pipeline.js'
+import type { CacheProvider, DbExecutor, ExecutionContext, MetadataConfig, RoleMeta } from '../../src/index.js'
+import { ConfigError, ConnectionError, ExecutionError, staticMetadata, staticRoles } from '../../src/index.js'
+import { createMultiDb } from '../../src/pipeline.js'
 
 // ── Mock helpers ───────────────────────────────────────────────
 

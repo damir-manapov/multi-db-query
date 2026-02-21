@@ -1,7 +1,7 @@
 import type { ExecutionContext, MetadataConfig, QueryDefinition, RoleMeta, TableMeta } from '@mkven/multi-db-validation'
 import { MetadataIndex } from '@mkven/multi-db-validation'
 import { describe, expect, it } from 'vitest'
-import { resolveNames } from '../src/resolution/resolver.js'
+import { resolveNames } from '../../src/resolution/resolver.js'
 
 // --- Fixtures ---
 
@@ -31,7 +31,7 @@ const ordersTable: TableMeta = {
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
     { apiName: 'userId', physicalName: 'user_id', type: 'uuid', nullable: false },
-    { apiName: 'amount', physicalName: 'amount', type: 'decimal', nullable: false },
+    { apiName: 'total', physicalName: 'total', type: 'decimal', nullable: false },
     { apiName: 'status', physicalName: 'status', type: 'string', nullable: false },
   ],
   relations: [{ column: 'userId', references: { table: 'users', column: 'id' }, type: 'many-to-one' as const }],
@@ -157,7 +157,7 @@ describe('Name Resolution — joins', () => {
     const q: QueryDefinition = {
       from: 'orders',
       joins: [{ table: 'users', columns: ['name'] }],
-      columns: ['id', 'amount'],
+      columns: ['id', 'total'],
     }
     const result = resolveNames(q, adminCtx, index, rolesById)
     // Check that join columns have qualified names
@@ -242,15 +242,15 @@ describe('Name Resolution — filters', () => {
   it('QueryColumnFilter', () => {
     const q: QueryDefinition = {
       from: 'orders',
-      filters: [{ column: 'amount', operator: '>', refColumn: 'amount' }],
+      filters: [{ column: 'total', operator: '>', refColumn: 'total' }],
     }
     const result = resolveNames(q, adminCtx, index, rolesById)
     expect(result.params).toHaveLength(0)
     const where = result.parts.where
     expect(where).toBeDefined()
     if (where !== undefined && 'leftColumn' in where) {
-      expect(where.leftColumn.columnName).toBe('amount')
-      expect(where.rightColumn.columnName).toBe('amount')
+      expect(where.leftColumn.columnName).toBe('total')
+      expect(where.rightColumn.columnName).toBe('total')
     }
   })
 
@@ -311,7 +311,7 @@ describe('Name Resolution — groupBy & aggregations', () => {
     const q: QueryDefinition = {
       from: 'orders',
       columns: [],
-      aggregations: [{ column: 'amount', fn: 'sum', alias: 'total' }],
+      aggregations: [{ column: 'total', fn: 'sum', alias: 'total' }],
     }
     const result = resolveNames(q, adminCtx, index, rolesById)
     expect(result.parts.select).toHaveLength(0)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ClickHouseDialect } from '../src/dialects/clickhouse.js'
+import { ClickHouseDialect } from '../../src/dialects/clickhouse.js'
 import type {
   ColumnRef,
   SqlParts,
@@ -12,7 +12,7 @@ import type {
   WhereExists,
   WhereFunction,
   WhereGroup,
-} from '../src/types/ir.js'
+} from '../../src/types/ir.js'
 
 const dialect = new ClickHouseDialect()
 
@@ -75,22 +75,25 @@ describe('ClickHouse — named params', () => {
 })
 
 describe('ClickHouse — IN / NOT IN', () => {
-  it('in with Array(String)', () => {
+  it('in with tuple expansion', () => {
     const cond: WhereCondition = { column: col('t0', 'id'), operator: 'in', paramIndex: 0, columnType: 'uuid' }
-    const { sql } = dialect.generate(base({ where: cond }), [['id1', 'id2']])
-    expect(sql).toContain('`t0`.`id` IN ({p1:Array(UUID)})')
+    const { sql, params } = dialect.generate(base({ where: cond }), [['id1', 'id2']])
+    expect(sql).toContain('`t0`.`id` IN tuple({p1:UUID}, {p2:UUID})')
+    expect(params).toEqual(['id1', 'id2'])
   })
 
-  it('notIn', () => {
+  it('notIn with tuple expansion', () => {
     const cond: WhereCondition = { column: col('t0', 'name'), operator: 'notIn', paramIndex: 0, columnType: 'string' }
-    const { sql } = dialect.generate(base({ where: cond }), [['a', 'b']])
-    expect(sql).toContain('`t0`.`name` NOT IN ({p1:Array(String)})')
+    const { sql, params } = dialect.generate(base({ where: cond }), [['a', 'b']])
+    expect(sql).toContain('`t0`.`name` NOT IN tuple({p1:String}, {p2:String})')
+    expect(params).toEqual(['a', 'b'])
   })
 
   it('in with int type', () => {
     const cond: WhereCondition = { column: col('t0', 'age'), operator: 'in', paramIndex: 0, columnType: 'int' }
-    const { sql } = dialect.generate(base({ where: cond }), [[1, 2]])
-    expect(sql).toContain('{p1:Array(Int32)}')
+    const { sql, params } = dialect.generate(base({ where: cond }), [[1, 2]])
+    expect(sql).toContain('IN tuple({p1:Int32}, {p2:Int32})')
+    expect(params).toEqual([1, 2])
   })
 })
 
@@ -226,26 +229,28 @@ describe('ClickHouse — array operators', () => {
     expect(sql).toContain('has(`t0`.`tags`, {p1:String})')
   })
 
-  it('hasAll()', () => {
+  it('hasAll() — individual typed params', () => {
     const cond: WhereArrayCondition = {
       column: col('t0', 'tags'),
       operator: 'containsAll',
       paramIndexes: [0],
       elementType: 'string',
     }
-    const { sql } = dialect.generate(base({ where: cond }), [['a', 'b']])
-    expect(sql).toContain('hasAll(`t0`.`tags`, {p1:Array(String)})')
+    const { sql, params } = dialect.generate(base({ where: cond }), [['a', 'b']])
+    expect(sql).toContain('hasAll(`t0`.`tags`, [{p1:String}, {p2:String}])')
+    expect(params).toEqual(['a', 'b'])
   })
 
-  it('hasAny()', () => {
+  it('hasAny() — individual typed params', () => {
     const cond: WhereArrayCondition = {
       column: col('t0', 'tags'),
       operator: 'containsAny',
       paramIndexes: [0],
       elementType: 'string',
     }
-    const { sql } = dialect.generate(base({ where: cond }), [['x', 'y']])
-    expect(sql).toContain('hasAny(`t0`.`tags`, {p1:Array(String)})')
+    const { sql, params } = dialect.generate(base({ where: cond }), [['x', 'y']])
+    expect(sql).toContain('hasAny(`t0`.`tags`, [{p1:String}, {p2:String}])')
+    expect(params).toEqual(['x', 'y'])
   })
 
   it('empty()', () => {
@@ -309,7 +314,7 @@ describe('ClickHouse — counted subquery', () => {
     }
     const { sql } = dialect.generate(base({ where: cond }), [5])
     expect(sql).toContain(
-      '(SELECT COUNT(*) FROM (SELECT 1 FROM `default`.`orders` AS `s0` WHERE `t0`.`id` = `s0`.`user_id` LIMIT 5) AS `_c`) >= {p1:Int32}',
+      '(SELECT COUNT(*) FROM (SELECT 1 FROM `default`.`orders` AS `s0` WHERE `t0`.`id` = `s0`.`user_id` LIMIT 5) AS `_c`) >= {p1:UInt64}',
     )
   })
 })
@@ -454,10 +459,11 @@ describe('ClickHouse — wildcard escaping', () => {
 })
 
 describe('ClickHouse — IN additional', () => {
-  it('in defaults to Array(String) when type unknown', () => {
+  it('in defaults to String when columnType omitted', () => {
     const cond: WhereCondition = { column: col('t0', 'name'), operator: 'in', paramIndex: 0 }
-    const { sql } = dialect.generate(base({ where: cond }), [['a']])
-    expect(sql).toContain('IN ({p1:Array(String)})')
+    const { sql, params } = dialect.generate(base({ where: cond }), [['a']])
+    expect(sql).toContain('IN tuple({p1:String})')
+    expect(params).toEqual(['a'])
   })
 })
 
@@ -533,10 +539,10 @@ describe('ClickHouse — aggregations additional', () => {
       select: [col('t0', 'status')],
       from: tbl('default.orders', 't0'),
       groupBy: [col('t0', 'status')],
-      aggregations: [{ fn: 'sum', column: col('t0', 'amount'), alias: 'total' }],
+      aggregations: [{ fn: 'sum', column: col('t0', 'total'), alias: 'total' }],
     })
     const { sql } = dialect.generate(parts, [])
-    expect(sql).toContain('SUM(`t0`.`amount`) AS `total`')
+    expect(sql).toContain('SUM(`t0`.`total`) AS `total`')
   })
 
   it('avg, min, max', () => {
@@ -544,15 +550,15 @@ describe('ClickHouse — aggregations additional', () => {
       select: [],
       from: tbl('default.orders', 't0'),
       aggregations: [
-        { fn: 'avg', column: col('t0', 'amount'), alias: 'avg_amount' },
-        { fn: 'min', column: col('t0', 'amount'), alias: 'min_amount' },
-        { fn: 'max', column: col('t0', 'amount'), alias: 'max_amount' },
+        { fn: 'avg', column: col('t0', 'total'), alias: 'avg_amount' },
+        { fn: 'min', column: col('t0', 'total'), alias: 'min_amount' },
+        { fn: 'max', column: col('t0', 'total'), alias: 'max_amount' },
       ],
     })
     const { sql } = dialect.generate(parts, [])
-    expect(sql).toContain('avg(`t0`.`amount`) AS `avg_amount`')
-    expect(sql).toContain('MIN(`t0`.`amount`) AS `min_amount`')
-    expect(sql).toContain('MAX(`t0`.`amount`) AS `max_amount`')
+    expect(sql).toContain('avg(`t0`.`total`) AS `avg_amount`')
+    expect(sql).toContain('MIN(`t0`.`total`) AS `min_amount`')
+    expect(sql).toContain('MAX(`t0`.`total`) AS `max_amount`')
   })
 })
 
@@ -562,7 +568,7 @@ describe('ClickHouse — HAVING additional', () => {
       select: [col('t0', 'status')],
       from: tbl('default.orders', 't0'),
       groupBy: [col('t0', 'status')],
-      aggregations: [{ fn: 'sum', column: col('t0', 'amount'), alias: 'total' }],
+      aggregations: [{ fn: 'sum', column: col('t0', 'total'), alias: 'total' }],
       having: { alias: 'total', fromParamIndex: 0, toParamIndex: 1 },
     })
     const { sql, params } = dialect.generate(parts, [100, 1000])
@@ -650,27 +656,31 @@ describe('ClickHouse — full query', () => {
 })
 
 describe('ClickHouse — type casts', () => {
-  it('decimal → Array(Decimal)', () => {
+  it('decimal → Decimal per element', () => {
     const cond: WhereCondition = { column: col('t0', 'price'), operator: 'in', paramIndex: 0, columnType: 'decimal' }
-    const { sql } = dialect.generate(base({ where: cond }), [[1.5]])
-    expect(sql).toContain('{p1:Array(Decimal)}')
+    const { sql, params } = dialect.generate(base({ where: cond }), [[1.5]])
+    expect(sql).toContain('IN tuple({p1:Decimal})')
+    expect(params).toEqual([1.5])
   })
 
-  it('boolean → Array(Bool)', () => {
+  it('boolean → Bool per element', () => {
     const cond: WhereCondition = { column: col('t0', 'active'), operator: 'in', paramIndex: 0, columnType: 'boolean' }
-    const { sql } = dialect.generate(base({ where: cond }), [[true]])
-    expect(sql).toContain('{p1:Array(Bool)}')
+    const { sql, params } = dialect.generate(base({ where: cond }), [[true]])
+    expect(sql).toContain('IN tuple({p1:Bool})')
+    expect(params).toEqual([true])
   })
 
-  it('date → Array(Date)', () => {
+  it('date → Date per element', () => {
     const cond: WhereCondition = { column: col('t0', 'created'), operator: 'in', paramIndex: 0, columnType: 'date' }
-    const { sql } = dialect.generate(base({ where: cond }), [['2024-01-01']])
-    expect(sql).toContain('{p1:Array(Date)}')
+    const { sql, params } = dialect.generate(base({ where: cond }), [['2024-01-01']])
+    expect(sql).toContain('IN tuple({p1:Date})')
+    expect(params).toEqual(['2024-01-01'])
   })
 
-  it('datetime → Array(DateTime)', () => {
-    const cond: WhereCondition = { column: col('t0', 'ts'), operator: 'in', paramIndex: 0, columnType: 'datetime' }
-    const { sql } = dialect.generate(base({ where: cond }), [['2024-01-01T00:00:00Z']])
-    expect(sql).toContain('{p1:Array(DateTime)}')
+  it('datetime → DateTime per element', () => {
+    const cond: WhereCondition = { column: col('t0', 'ts'), operator: 'in', paramIndex: 0, columnType: 'timestamp' }
+    const { sql, params } = dialect.generate(base({ where: cond }), [['2024-01-01T00:00:00Z']])
+    expect(sql).toContain('IN tuple({p1:DateTime})')
+    expect(params).toEqual(['2024-01-01T00:00:00Z'])
   })
 })

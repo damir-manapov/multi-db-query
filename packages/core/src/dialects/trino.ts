@@ -7,7 +7,6 @@ import type {
   HavingNode,
   JoinClause,
   OrderByClause,
-  SqlDialect,
   SqlParts,
   TableRef,
   WhereArrayCondition,
@@ -20,6 +19,8 @@ import type {
   WhereGroup,
   WhereNode,
 } from '../types/ir.js'
+import { escapeLike, isArrayCond, isBetween, isColCond, isCounted, isExists, isFn, isGroup } from '../generator/fragments.js'
+import type { SqlDialect } from './dialect.js'
 
 // --- Trino Dialect ---
 
@@ -320,36 +321,6 @@ class TrinoGenerator {
   }
 }
 
-// --- Type guards for WhereNode ---
-
-function isGroup(n: WhereNode): n is WhereGroup {
-  return 'logic' in n && 'conditions' in n
-}
-
-function isExists(n: WhereNode): n is WhereExists {
-  return 'exists' in n && 'subquery' in n
-}
-
-function isCounted(n: WhereNode): n is WhereCountedSubquery {
-  return 'countParamIndex' in n && 'subquery' in n
-}
-
-function isColCond(n: WhereNode): n is WhereColumnCondition {
-  return 'leftColumn' in n && 'rightColumn' in n
-}
-
-function isFn(n: WhereNode): n is WhereFunction {
-  return 'fn' in n && 'fnParamIndex' in n
-}
-
-function isBetween(n: WhereNode): n is WhereBetween {
-  return 'fromParamIndex' in n && 'toParamIndex' in n && !('alias' in n)
-}
-
-function isArrayCond(n: WhereNode): n is WhereArrayCondition {
-  return 'elementType' in n
-}
-
 // --- Helpers ---
 
 function quoteCol(col: ColumnRef): string {
@@ -366,8 +337,4 @@ function quoteTable(ref: TableRef): string {
     segments.push(`"${p}"`)
   }
   return `${segments.join('.')} AS "${ref.alias}"`
-}
-
-function escapeLike(value: string): string {
-  return value.replace(/[%_\\]/g, '\\$&')
 }

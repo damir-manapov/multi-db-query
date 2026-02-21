@@ -10,9 +10,8 @@ import { ConnectionError, ExecutionError, validateQuery } from '@mkven/multi-db-
 
 import type { EffectiveColumn } from './access/access.js'
 import { maskRows, resolveTableAccess } from './access/access.js'
-import { ClickHouseDialect } from './dialects/clickhouse.js'
-import { PostgresDialect } from './dialects/postgres.js'
-import { TrinoDialect } from './dialects/trino.js'
+import { debugEntry, withDebugLog } from './debug/logger.js'
+import { generateSql } from './generator/generator.js'
 import type { RegistrySnapshot } from './metadata/registry.js'
 import { MetadataRegistry } from './metadata/registry.js'
 import type { CachePlan, DialectName, MaterializedPlan, QueryPlan, TrinoPlan } from './planner/planner.js'
@@ -20,7 +19,7 @@ import { planQuery } from './planner/planner.js'
 import type { ResolveResult } from './resolution/resolver.js'
 import { resolveNames } from './resolution/resolver.js'
 import type { CacheProvider, DbExecutor } from './types/interfaces.js'
-import type { SqlDialect, SqlParts } from './types/ir.js'
+import type { SqlParts } from './types/ir.js'
 import type { MetadataProvider, RoleProvider } from './types/providers.js'
 
 // ── Public Types ───────────────────────────────────────────────
@@ -42,12 +41,6 @@ export interface MultiDb {
 }
 
 // ── Dialect Singletons ─────────────────────────────────────────
-
-const dialectInstances: Record<DialectName, SqlDialect> = {
-  postgres: new PostgresDialect(),
-  clickhouse: new ClickHouseDialect(),
-  trino: new TrinoDialect(),
-}
 
 // ── createMultiDb ──────────────────────────────────────────────
 
@@ -109,37 +102,37 @@ async function runQuery(
   const t0 = Date.now()
   const vErr = validateQuery(definition, context, snapshot.index, snapshot.roles)
   if (vErr !== null) throw vErr
-  if (debug) log.push(entry('validation', 'Validated', Date.now() - t0))
+  if (debug) log.push(debugEntry('validation', 'Validated', Date.now() - t0))
 
   // 2. Access control — resolve per-column masking
   const t1 = Date.now()
   const maskingMap = resolveMaskingMap(definition, context, snapshot)
-  if (debug) log.push(entry('access-control', 'Access resolved', Date.now() - t1))
+  if (debug) log.push(debugEntry('access-control', 'Access resolved', Date.now() - t1))
 
   // 3. Plan
   const t2 = Date.now()
   const plan = planQuery(definition, snapshot, { trinoEnabled: 'trino' in executors })
   const planningMs = Date.now() - t2
-  if (debug) log.push(entry('planning', `Strategy: ${plan.strategy}`, planningMs))
+  if (debug) log.push(debugEntry('planning', `Strategy: ${plan.strategy}`, planningMs))
 
   // 4. Resolve names
   const t3 = Date.now()
   const resolved = resolveNames(definition, context, snapshot.index, snapshot.index.rolesById)
   if (plan.strategy === 'materialized') overrideTables(resolved.parts, plan, definition, snapshot)
   if (plan.strategy === 'trino') setCatalogs(resolved.parts, plan, definition, snapshot)
-  if (debug) log.push(entry('name-resolution', 'Names resolved', Date.now() - t3))
+  if (debug) log.push(debugEntry('name-resolution', 'Names resolved', Date.now() - t3))
 
   // 5. Generate SQL
   const t4 = Date.now()
-  const dialectName = dialectFor(plan)
-  const gen = dialectInstances[dialectName].generate(resolved.parts, resolved.params)
+  const { sql, params: genParams, dialectName } = generateSql(plan, resolved.parts, resolved.params)
+  const gen = { sql, params: genParams }
   const generationMs = Date.now() - t4
-  if (debug) log.push(entry('sql-generation', `Generated (${dialectName})`, generationMs, { sql: gen.sql }))
+  if (debug) log.push(debugEntry('sql-generation', `Generated (${dialectName})`, generationMs, { sql: gen.sql }))
 
   // 6a. SQL-only mode
   if (definition.executeMode === 'sql-only') {
     const meta = buildMeta(plan, resolved, dialectName, definition, snapshot, planningMs, generationMs)
-    return withDebug({ kind: 'sql', sql: gen.sql, params: [...gen.params], meta }, debug, log)
+    return withDebugLog({ kind: 'sql', sql: gen.sql, params: [...gen.params], meta }, debug, log)
   }
 
   // 6b. Cache path (P0)
@@ -177,7 +170,7 @@ async function runQuery(
     throw toExecError(err, dbId, dialectName, gen)
   }
   const executionMs = Date.now() - t5
-  if (debug) log.push(entry('execution', `Executed (${rows.length} rows)`, executionMs))
+  if (debug) log.push(debugEntry('execution', `Executed (${rows.length} rows)`, executionMs))
 
   // 7. Mask and build result
   return finishResult(
@@ -229,7 +222,7 @@ async function cachePath(
   // Lookup
   const tc = Date.now()
   const cached = await provider.getMany(keys)
-  if (debug) log.push(entry('cache', `Lookup (${keys.length} keys)`, Date.now() - tc))
+  if (debug) log.push(debugEntry('cache', `Lookup (${keys.length} keys)`, Date.now() - tc))
 
   // Check hits
   const hits: Record<string, unknown>[] = []
@@ -275,7 +268,7 @@ async function cachePath(
   const missingResolved =
     queryIds === byIds ? resolved : resolveNames(missingDef, context, snapshot.index, snapshot.index.rolesById)
   const missingGen =
-    queryIds === byIds ? gen : dialectInstances[dialectName].generate(missingResolved.parts, missingResolved.params)
+    queryIds === byIds ? gen : generateSql(plan, missingResolved.parts, missingResolved.params)
 
   const t5 = Date.now()
   let rows: Record<string, unknown>[]
@@ -286,9 +279,9 @@ async function cachePath(
   }
   const executionMs = Date.now() - t5
   if (debug && hits.length > 0) {
-    log.push(entry('execution', `Partial cache: ${hits.length} cached, ${rows.length} from DB`, executionMs))
+    log.push(debugEntry('execution', `Partial cache: ${hits.length} cached, ${rows.length} from DB`, executionMs))
   } else if (debug) {
-    log.push(entry('execution', `Fallback executed (${rows.length} rows)`, executionMs))
+    log.push(debugEntry('execution', `Fallback executed (${rows.length} rows)`, executionMs))
   }
 
   // Merge cached hits + DB results
@@ -331,9 +324,9 @@ function finishResult(
   const meta = buildMeta(plan, resolved, dialectName, definition, snapshot, planningMs, generationMs, executionMs)
 
   if (resolved.mode === 'count') {
-    return withDebug({ kind: 'count', count: extractCount(masked), meta }, debug, log)
+    return withDebugLog({ kind: 'count', count: extractCount(masked), meta }, debug, log)
   }
-  return withDebug({ kind: 'data', data: masked, meta }, debug, log)
+  return withDebugLog({ kind: 'data', data: masked, meta }, debug, log)
 }
 
 function extractCount(rows: Record<string, unknown>[]): number {
@@ -422,20 +415,6 @@ function targetDb(plan: QueryPlan): string {
       return plan.fallbackDatabase
     case 'trino':
       return 'trino'
-  }
-}
-
-// ── Dialect Selection ──────────────────────────────────────────
-
-function dialectFor(plan: QueryPlan): DialectName {
-  switch (plan.strategy) {
-    case 'direct':
-    case 'materialized':
-      return plan.dialect
-    case 'trino':
-      return 'trino'
-    case 'cache':
-      return plan.fallbackDialect
   }
 }
 
@@ -653,23 +632,4 @@ function extractTimeoutMs(err: Error): number {
     return (err as Record<string, unknown>).timeoutMs as number
   }
   return 0
-}
-
-// ── Debug Helpers ──────────────────────────────────────────────
-
-function entry(phase: DebugLogEntry['phase'], message: string, durationMs: number, details?: unknown): DebugLogEntry {
-  const result: DebugLogEntry = {
-    timestamp: Date.now(),
-    phase,
-    message: `${message} (${durationMs.toFixed(1)}ms)`,
-  }
-  if (details !== undefined) result.details = details
-  return result
-}
-
-function withDebug(result: QueryResult, debug: boolean, log: DebugLogEntry[]): QueryResult {
-  if (debug && log.length > 0) {
-    return { ...result, debugLog: log }
-  }
-  return result
 }

@@ -7,7 +7,6 @@ import type {
   HavingNode,
   JoinClause,
   OrderByClause,
-  SqlDialect,
   SqlParts,
   TableRef,
   WhereArrayCondition,
@@ -20,6 +19,8 @@ import type {
   WhereGroup,
   WhereNode,
 } from '../types/ir.js'
+import { escapeLike, isArrayCond, isBetween, isColCond, isCounted, isExists, isFn, isGroup } from '../generator/fragments.js'
+import type { SqlDialect } from './dialect.js'
 
 // --- Postgres Dialect ---
 
@@ -199,7 +200,7 @@ class PgGenerator {
     const idx = c.paramIndexes?.[0]
     if (idx === undefined) return `${col} IS NOT NULL`
 
-    if (op === 'contains') return `${this.ref(idx)} = ANY(${col})`
+    if (op === 'contains') return `${this.ref(idx)}::${pgScalarCast(c.elementType)} = ANY(${col})`
     if (op === 'containsAll') return `${col} @> ${this.ref(idx)}::${cast}`
     // containsAny
     return `${col} && ${this.ref(idx)}::${cast}`
@@ -304,36 +305,6 @@ class PgGenerator {
   }
 }
 
-// --- Type guards for WhereNode ---
-
-function isGroup(n: WhereNode): n is WhereGroup {
-  return 'logic' in n && 'conditions' in n
-}
-
-function isExists(n: WhereNode): n is WhereExists {
-  return 'exists' in n && 'subquery' in n
-}
-
-function isCounted(n: WhereNode): n is WhereCountedSubquery {
-  return 'countParamIndex' in n && 'subquery' in n
-}
-
-function isColCond(n: WhereNode): n is WhereColumnCondition {
-  return 'leftColumn' in n && 'rightColumn' in n
-}
-
-function isFn(n: WhereNode): n is WhereFunction {
-  return 'fn' in n && 'fnParamIndex' in n
-}
-
-function isBetween(n: WhereNode): n is WhereBetween {
-  return 'fromParamIndex' in n && 'toParamIndex' in n && !('alias' in n)
-}
-
-function isArrayCond(n: WhereNode): n is WhereArrayCondition {
-  return 'elementType' in n
-}
-
 // --- Helpers ---
 
 function quoteCol(col: ColumnRef): string {
@@ -344,10 +315,6 @@ function quoteTable(ref: TableRef): string {
   const parts = ref.physicalName.split('.')
   const quoted = parts.map((p) => `"${p}"`).join('.')
   return `${quoted} AS "${ref.alias}"`
-}
-
-function escapeLike(value: string): string {
-  return value.replace(/[%_\\]/g, '\\$&')
 }
 
 function pgCast(elementType: string | undefined): string {
@@ -362,4 +329,17 @@ function pgCast(elementType: string | undefined): string {
     datetime: 'timestamp[]',
   }
   return map[elementType] ?? 'text[]'
+}
+
+function pgScalarCast(elementType: string): string {
+  const map: Record<string, string> = {
+    uuid: 'uuid',
+    string: 'text',
+    int: 'integer',
+    decimal: 'numeric',
+    boolean: 'bool',
+    date: 'date',
+    datetime: 'timestamp',
+  }
+  return map[elementType] ?? 'text'
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { TableMeta } from '../src/types/metadata.js'
-import { validateApiName, validateConfig } from '../src/validation/configValidator.js'
-import { eventsTable, ordersTable, usersTable, validConfig } from './fixtures/testConfig.js'
+import type { TableMeta } from '../../src/types/metadata.js'
+import { validateApiName, validateConfig } from '../../src/validation/configValidator.js'
+import { eventsTable, ordersTable, usersTable, validConfig } from '../fixtures/testConfig.js'
 
 // --- validateApiName ---
 

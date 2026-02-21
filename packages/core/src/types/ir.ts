@@ -157,8 +157,6 @@ export interface ColumnMapping {
   maskingFn?: 'email' | 'phone' | 'name' | 'uuid' | 'number' | 'date' | 'full' | undefined
 }
 
-// --- SQL Dialect ---
+// --- SQL Dialect (canonical definition in dialects/dialect.ts) ---
 
-export interface SqlDialect {
-  generate(parts: SqlParts, params: unknown[]): { sql: string; params: unknown[] }
-}
+export type { SqlDialect } from '../dialects/dialect.js'

@@ -9,8 +9,8 @@ import type {
 } from '@mkven/multi-db-validation'
 import { MetadataIndex, PlannerError } from '@mkven/multi-db-validation'
 import { describe, expect, it } from 'vitest'
-import type { RegistrySnapshot } from '../src/metadata/registry.js'
-import { planQuery } from '../src/planner/planner.js'
+import type { RegistrySnapshot } from '../../src/metadata/registry.js'
+import { planQuery } from '../../src/planner/planner.js'
 
 // --- Fixtures ---
 
@@ -43,7 +43,7 @@ const ordersTable: TableMeta = {
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
     { apiName: 'userId', physicalName: 'user_id', type: 'uuid', nullable: false },
-    { apiName: 'amount', physicalName: 'amount', type: 'decimal', nullable: false },
+    { apiName: 'total', physicalName: 'total', type: 'decimal', nullable: false },
   ],
   relations: [{ column: 'userId', references: { table: 'users', column: 'id' }, type: 'many-to-one' as const }],
 }
@@ -110,7 +110,7 @@ const archiveTable: TableMeta = {
   primaryKey: ['id'],
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
-    { apiName: 'amount', physicalName: 'amount', type: 'decimal', nullable: false },
+    { apiName: 'total', physicalName: 'total', type: 'decimal', nullable: false },
   ],
   relations: [],
 }

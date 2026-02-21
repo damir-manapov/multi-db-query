@@ -1,6 +1,6 @@
 import type { DbExecutor, MetadataConfig, RoleMeta } from '@mkven/multi-db'
 import { createMultiDb, staticMetadata, staticRoles } from '@mkven/multi-db'
-import { describeQueryContract } from '../src/contract/queryContract.js'
+import { describeQueryContract } from '../../src/contract/queryContract.js'
 
 // ── Fixtures ───────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { TrinoDialect } from '../src/dialects/trino.js'
+import { TrinoDialect } from '../../src/dialects/trino.js'
 import type {
   ColumnRef,
   SqlParts,
@@ -12,7 +12,7 @@ import type {
   WhereExists,
   WhereFunction,
   WhereGroup,
-} from '../src/types/ir.js'
+} from '../../src/types/ir.js'
 
 const dialect = new TrinoDialect()
 
@@ -539,10 +539,10 @@ describe('Trino — aggregations additional', () => {
       select: [col('t0', 'status')],
       from: tbl('public.orders', 't0'),
       groupBy: [col('t0', 'status')],
-      aggregations: [{ fn: 'sum', column: col('t0', 'amount'), alias: 'total' }],
+      aggregations: [{ fn: 'sum', column: col('t0', 'total'), alias: 'total' }],
     })
     const { sql } = dialect.generate(parts, [])
-    expect(sql).toContain('SUM("t0"."amount") AS "total"')
+    expect(sql).toContain('SUM("t0"."total") AS "total"')
   })
 
   it('avg, min, max', () => {
@@ -550,15 +550,15 @@ describe('Trino — aggregations additional', () => {
       select: [],
       from: tbl('public.orders', 't0'),
       aggregations: [
-        { fn: 'avg', column: col('t0', 'amount'), alias: 'avg_amount' },
-        { fn: 'min', column: col('t0', 'amount'), alias: 'min_amount' },
-        { fn: 'max', column: col('t0', 'amount'), alias: 'max_amount' },
+        { fn: 'avg', column: col('t0', 'total'), alias: 'avg_amount' },
+        { fn: 'min', column: col('t0', 'total'), alias: 'min_amount' },
+        { fn: 'max', column: col('t0', 'total'), alias: 'max_amount' },
       ],
     })
     const { sql } = dialect.generate(parts, [])
-    expect(sql).toContain('AVG("t0"."amount") AS "avg_amount"')
-    expect(sql).toContain('MIN("t0"."amount") AS "min_amount"')
-    expect(sql).toContain('MAX("t0"."amount") AS "max_amount"')
+    expect(sql).toContain('AVG("t0"."total") AS "avg_amount"')
+    expect(sql).toContain('MIN("t0"."total") AS "min_amount"')
+    expect(sql).toContain('MAX("t0"."total") AS "max_amount"')
   })
 })
 
@@ -568,7 +568,7 @@ describe('Trino — HAVING additional', () => {
       select: [col('t0', 'status')],
       from: tbl('public.orders', 't0'),
       groupBy: [col('t0', 'status')],
-      aggregations: [{ fn: 'sum', column: col('t0', 'amount'), alias: 'total' }],
+      aggregations: [{ fn: 'sum', column: col('t0', 'total'), alias: 'total' }],
       having: { alias: 'total', fromParamIndex: 0, toParamIndex: 1 },
     })
     const { sql, params } = dialect.generate(parts, [100, 1000])

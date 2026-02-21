@@ -1,8 +1,8 @@
 import type { MetadataConfig, RoleMeta, TableMeta } from '@mkven/multi-db-validation'
 import { describe, expect, it } from 'vitest'
-import { staticMetadata, staticRoles } from '../src/metadata/providers.js'
-import { MetadataRegistry } from '../src/metadata/registry.js'
-import type { MetadataProvider, RoleProvider } from '../src/types/providers.js'
+import { staticMetadata, staticRoles } from '../../src/metadata/providers.js'
+import { MetadataRegistry } from '../../src/metadata/registry.js'
+import type { MetadataProvider, RoleProvider } from '../../src/types/providers.js'
 
 // --- Fixtures ---
 
@@ -31,7 +31,7 @@ const ordersTable: TableMeta = {
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
     { apiName: 'userId', physicalName: 'user_id', type: 'uuid', nullable: false },
-    { apiName: 'amount', physicalName: 'amount', type: 'decimal', nullable: false },
+    { apiName: 'total', physicalName: 'total', type: 'decimal', nullable: false },
   ],
   relations: [{ column: 'userId', references: { table: 'users', column: 'id' }, type: 'many-to-one' }],
 }

@@ -28,7 +28,7 @@ export const chAnalytics: DatabaseMeta = {
 }
 
 export const icebergWarehouse: DatabaseMeta = {
-  id: 'iceberg-wh',
+  id: 'iceberg-archive',
   engine: 'iceberg',
   trinoCatalog: 'iceberg_archive',
 }
@@ -43,6 +43,7 @@ export const usersTable: TableMeta = {
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
     { apiName: 'name', physicalName: 'name', type: 'string', nullable: false },
+    { apiName: 'lastName', physicalName: 'last_name', type: 'string', nullable: true },
     { apiName: 'email', physicalName: 'email', type: 'string', nullable: false, maskingFn: 'email' },
     { apiName: 'phone', physicalName: 'phone', type: 'string', nullable: true, maskingFn: 'phone' },
     { apiName: 'age', physicalName: 'age', type: 'int', nullable: true },
@@ -63,7 +64,7 @@ export const ordersTable: TableMeta = {
     { apiName: 'userId', physicalName: 'user_id', type: 'uuid', nullable: false },
     { apiName: 'tenantId', physicalName: 'tenant_id', type: 'uuid', nullable: false },
     { apiName: 'productId', physicalName: 'product_id', type: 'uuid', nullable: true },
-    { apiName: 'amount', physicalName: 'amount', type: 'decimal', nullable: false, maskingFn: 'number' },
+    { apiName: 'total', physicalName: 'total', type: 'decimal', nullable: false, maskingFn: 'number' },
     { apiName: 'discount', physicalName: 'discount', type: 'decimal', nullable: true },
     { apiName: 'status', physicalName: 'status', type: 'string', nullable: false },
     { apiName: 'internalNote', physicalName: 'internal_note', type: 'string', nullable: true, maskingFn: 'full' },
@@ -174,7 +175,7 @@ export const metricsTable: TableMeta = {
 export const ordersArchiveTable: TableMeta = {
   id: 'ordersArchive',
   apiName: 'ordersArchive',
-  database: 'iceberg-wh',
+  database: 'iceberg-archive',
   physicalName: 'warehouse.orders_archive',
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
@@ -195,14 +196,6 @@ export const ordersArchiveTable: TableMeta = {
 
 // --- External Syncs (3) ---
 
-export const userSync: ExternalSync = {
-  sourceTable: 'users',
-  targetDatabase: 'ch-analytics',
-  targetPhysicalName: 'default.users_replica',
-  method: 'debezium',
-  estimatedLag: 'seconds',
-}
-
 export const ordersSyncToCh: ExternalSync = {
   sourceTable: 'orders',
   targetDatabase: 'ch-analytics',
@@ -213,7 +206,7 @@ export const ordersSyncToCh: ExternalSync = {
 
 export const ordersSyncToIceberg: ExternalSync = {
   sourceTable: 'orders',
-  targetDatabase: 'iceberg-wh',
+  targetDatabase: 'iceberg-archive',
   targetPhysicalName: 'warehouse.orders_current',
   method: 'debezium',
   estimatedLag: 'minutes',
@@ -250,8 +243,8 @@ export const tenantUserRole: RoleMeta = {
   tables: [
     {
       tableId: 'orders',
-      allowedColumns: ['id', 'amount', 'status', 'createdAt'],
-      maskedColumns: ['amount'],
+      allowedColumns: ['id', 'total', 'status', 'createdAt'],
+      maskedColumns: ['total'],
     },
     {
       tableId: 'users',
@@ -319,7 +312,7 @@ export function validConfig(): MetadataConfig {
       ordersArchiveTable,
     ],
     caches: [userCache, productsCache],
-    externalSyncs: [userSync, ordersSyncToCh, ordersSyncToIceberg, tenantsSyncToPgMain],
+    externalSyncs: [ordersSyncToCh, ordersSyncToIceberg, tenantsSyncToPgMain],
     trino: { enabled: true },
   }
 }

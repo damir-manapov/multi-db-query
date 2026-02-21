@@ -1,7 +1,7 @@
 import type { HealthCheckResult, QueryResult } from '@mkven/multi-db-validation'
 import { ConnectionError, ExecutionError, PlannerError, ValidationError } from '@mkven/multi-db-validation'
 import { describe, expect, it } from 'vitest'
-import { createMultiDbClient } from '../src/client.js'
+import { createMultiDbClient } from '../../src/client.js'
 
 // ── Mock fetch helper ──────────────────────────────────────────
 

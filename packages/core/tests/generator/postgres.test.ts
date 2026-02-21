@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PostgresDialect } from '../src/dialects/postgres.js'
+import { PostgresDialect } from '../../src/dialects/postgres.js'
 import type {
   ColumnRef,
   SqlParts,
@@ -12,7 +12,7 @@ import type {
   WhereExists,
   WhereFunction,
   WhereGroup,
-} from '../src/types/ir.js'
+} from '../../src/types/ir.js'
 
 // --- Helpers ---
 
@@ -308,7 +308,7 @@ describe('PostgresDialect — WHERE array operators', () => {
       elementType: 'string',
     }
     const { sql, params } = dialect.generate(base({ where: cond }), ['urgent'])
-    expect(sql).toContain('WHERE $1 = ANY("t0"."tags")')
+    expect(sql).toContain('WHERE $1::text = ANY("t0"."tags")')
     expect(params).toEqual(['urgent'])
   })
 
@@ -360,12 +360,12 @@ describe('PostgresDialect — WHERE array operators', () => {
 describe('PostgresDialect — WHERE column-to-column', () => {
   it('column comparison', () => {
     const cond: WhereColumnCondition = {
-      leftColumn: col('t0', 'amount'),
+      leftColumn: col('t0', 'total'),
       operator: '>',
       rightColumn: col('t1', 'limit'),
     }
     const { sql } = dialect.generate(base({ where: cond }), [])
-    expect(sql).toContain('WHERE "t0"."amount" > "t1"."limit"')
+    expect(sql).toContain('WHERE "t0"."total" > "t1"."limit"')
   })
 })
 
@@ -497,10 +497,10 @@ describe('PostgresDialect — GROUP BY + aggregations', () => {
       select: [col('t0', 'status')],
       from: tbl('public.orders', 't0'),
       groupBy: [col('t0', 'status')],
-      aggregations: [{ fn: 'sum', column: col('t0', 'amount'), alias: 'total' }],
+      aggregations: [{ fn: 'sum', column: col('t0', 'total'), alias: 'total' }],
     })
     const { sql } = dialect.generate(parts, [])
-    expect(sql).toContain('SUM("t0"."amount") AS "total"')
+    expect(sql).toContain('SUM("t0"."total") AS "total"')
   })
 
   it('avg, min, max', () => {
@@ -508,15 +508,15 @@ describe('PostgresDialect — GROUP BY + aggregations', () => {
       select: [],
       from: tbl('public.orders', 't0'),
       aggregations: [
-        { fn: 'avg', column: col('t0', 'amount'), alias: 'avg_amount' },
-        { fn: 'min', column: col('t0', 'amount'), alias: 'min_amount' },
-        { fn: 'max', column: col('t0', 'amount'), alias: 'max_amount' },
+        { fn: 'avg', column: col('t0', 'total'), alias: 'avg_amount' },
+        { fn: 'min', column: col('t0', 'total'), alias: 'min_amount' },
+        { fn: 'max', column: col('t0', 'total'), alias: 'max_amount' },
       ],
     })
     const { sql } = dialect.generate(parts, [])
-    expect(sql).toContain('AVG("t0"."amount") AS "avg_amount"')
-    expect(sql).toContain('MIN("t0"."amount") AS "min_amount"')
-    expect(sql).toContain('MAX("t0"."amount") AS "max_amount"')
+    expect(sql).toContain('AVG("t0"."total") AS "avg_amount"')
+    expect(sql).toContain('MIN("t0"."total") AS "min_amount"')
+    expect(sql).toContain('MAX("t0"."total") AS "max_amount"')
   })
 })
 
@@ -539,7 +539,7 @@ describe('PostgresDialect — HAVING', () => {
       select: [col('t0', 'status')],
       from: tbl('public.orders', 't0'),
       groupBy: [col('t0', 'status')],
-      aggregations: [{ fn: 'sum', column: col('t0', 'amount'), alias: 'total' }],
+      aggregations: [{ fn: 'sum', column: col('t0', 'total'), alias: 'total' }],
       having: { alias: 'total', fromParamIndex: 0, toParamIndex: 1 },
     })
     const { sql, params } = dialect.generate(parts, [100, 1000])
