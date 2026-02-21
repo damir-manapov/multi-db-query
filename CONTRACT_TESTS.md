@@ -193,6 +193,55 @@ Trino: `{ enabled: true }`
   - `orderId → orders.id` (many-to-one)
   - `productId → products.id` (many-to-one)
 
+#### samples (pg-main)
+
+Mirror table for per-dialect operator testing. Identical schema exists in both pg-main and ch-analytics (as `chSamples`), enabling the same test assertions to be reused across all three dialects.
+
+| apiName | physicalName | type | nullable | maskingFn |
+|---|---|---|---|---|
+| id | id | int | false | — |
+| name | name | string | false | — |
+| email | email | string | false | — |
+| category | category | string | false | — |
+| amount | amount | decimal | false | — |
+| discount | discount | decimal | true | — |
+| status | status | string | false | — |
+| tags | tags | string[] | true | — |
+| scores | scores | int[] | true | — |
+| isActive | is_active | boolean | true | — |
+| note | note | string | true | — |
+| createdAt | created_at | timestamp | false | — |
+| dueDate | due_date | date | true | — |
+| externalId | external_id | uuid | false | — |
+
+- Primary key: `[id]`
+- Relations: none
+
+#### chSamples (ch-analytics)
+
+Identical schema to `samples` on pg-main. Used for ClickHouse-direct and Trino cross-DB operator testing.
+
+| apiName | physicalName | type | nullable | maskingFn |
+|---|---|---|---|---|
+| id | id | int | false | — |
+| name | name | string | false | — |
+| email | email | string | false | — |
+| category | category | string | false | — |
+| amount | amount | decimal | false | — |
+| discount | discount | decimal | true | — |
+| status | status | string | false | — |
+| tags | tags | string[] | true | — |
+| scores | scores | int[] | true | — |
+| isActive | is_active | boolean | true | — |
+| note | note | string | true | — |
+| createdAt | created_at | timestamp | false | — |
+| dueDate | due_date | date | true | — |
+| externalId | external_id | uuid | false | — |
+
+- Primary key: `[id]`
+- Relations:
+  - `id → samples.id` (many-to-one, cross-DB mirror — enables Trino routing)
+
 ### External Syncs (Debezium)
 
 | Source | Target DB | Target Physical | Lag |
@@ -274,6 +323,16 @@ The implementation must populate tables with deterministic data so assertions on
 | 2 | uuid-p2 | 5 | 40.00 |
 | 5 | uuid-p3 | 3 | 15.00 |
 
+**samples** (pg-main, minimum 5 rows) and **chSamples** (ch-analytics, **identical** data):
+
+| id | name | email | category | amount | discount | status | tags | scores | isActive | note | createdAt | dueDate | externalId |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | Alpha | alpha@test.com | electronics | 100.00 | 10.00 | active | ["fast","new"] | [1,2] | true | note-1 | 2024-01-15T10:00:00Z | 2024-02-20 | uuid-c1 |
+| 2 | Beta | beta@test.com | clothing | 200.00 | null | paid | ["slow"] | [3] | true | null | 2024-02-20T14:30:00Z | 2024-03-25 | uuid-c2 |
+| 3 | Gamma | gamma@test.com | electronics | 50.00 | 5.00 | cancelled | ["fast"] | null | false | note-3 | 2024-03-10T08:15:00Z | null | uuid-c3 |
+| 4 | Delta | delta@test.com | food | 300.00 | null | active | null | [] | null | null | 2024-04-05T16:45:00Z | 2024-05-01 | uuid-c1 |
+| 5 | Epsilon | epsilon@test.com | electronics | 150.00 | 0.00 | shipped | ["fast","slow","new"] | [1,2,3] | true | note-5 | 2024-05-12T12:00:00Z | 2024-06-15 | uuid-c2 |
+
 ---
 
 ## Test Categories
@@ -338,6 +397,8 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 ---
 
 ## 3. Filtering
+
+> **Dialect note:** All tests in sections 3–9 target pg-main tables (orders, users, products, invoices, orderItems) and thus exercise only the PostgreSQL dialect. ClickHouse and Trino dialects are tested separately in **Section 19: Per-Dialect Operator Correctness** using the `samples`/`chSamples` mirror tables with identical seed data.
 
 ### 3.1 Comparison Operators
 
@@ -1035,6 +1096,136 @@ These tests verify the dedicated validation endpoints that run without DB connec
 
 ---
 
+## 19. Per-Dialect Operator Correctness
+
+Sections 3–9 exercise all operators using pg-main tables (orders, users, products), which implicitly test only the **PostgreSQL** dialect. Since each dialect (PostgreSQL, ClickHouse, Trino) has a **separate SQL generator** with materially different SQL — different parameter syntax (`$N` vs `{pN:Type}` vs `?`), column quoting (`"col"` vs `` `col` ``), and dialect-specific functions — identical query logic can produce different bugs in each dialect.
+
+This section re-tests all operator categories against **ClickHouse** and **Trino** using the `samples` / `chSamples` mirror tables with identical seed data (see [Fixture](#fixture)). PostgreSQL is already covered by sections 3–9.
+
+### 19.1 ClickHouse Operators
+
+All tests target `chSamples` (ch-analytics), exercising ClickHouse's `{pN:Type}` typed parameterization, `` `backtick` `` column quoting, and dialect-specific functions (`ilike()`, `startsWith()`, `endsWith()`, `has()`, `hasAll()`, `hasAny()`, `empty()`, `editDistance()`, `IN tuple(...)`).
+
+#### 19.1.1 Comparison & Pattern
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1800 | CH `=` string | chSamples, `status = 'active'` | 2 rows (ids 1, 4) |
+| C1801 | CH `!=` | chSamples, `status != 'cancelled'` | 4 rows |
+| C1802 | CH `>` decimal | chSamples, `amount > 100` | 3 rows (ids 2, 4, 5) |
+| C1803 | CH `like` | chSamples, `email like '%@test%'` | all 5 rows |
+| C1804 | CH `ilike` | chSamples, `email ilike '%TEST%'` | all 5 rows — `ilike()` function |
+| C1805 | CH `contains` | chSamples, `email contains 'alpha'` | 1 row (id 1) |
+| C1806 | CH `icontains` | chSamples, `name icontains 'ALPHA'` | 1 row (id 1) — `ilike()` with escape |
+| C1807 | CH `startsWith` | chSamples, `name startsWith 'Al'` | 1 row (id 1) — native `startsWith()` function |
+| C1808 | CH `endsWith` | chSamples, `email endsWith '@test.com'` | all 5 rows — native `endsWith()` function |
+| C1809 | CH `between` decimal | chSamples, `amount between { from: 100, to: 200 }` | 3 rows (ids 1, 2, 5) |
+| C1810 | CH `notBetween` | chSamples, `amount notBetween { from: 100, to: 200 }` | 2 rows (ids 3, 4) — `NOT (col BETWEEN ...)` wrapping |
+| C1811 | CH `in` | chSamples, `status in ['active', 'paid']` | 3 rows (ids 1, 2, 4) — `IN tuple({p1:String}, {p2:String})` |
+| C1812 | CH `notIn` | chSamples, `status notIn ['cancelled']` | 4 rows — `NOT IN tuple(...)` |
+| C1813 | CH `isNull` | chSamples, `discount isNull` | 2 rows (ids 2, 4) |
+| C1814 | CH `isNotNull` | chSamples, `discount isNotNull` | 3 rows (ids 1, 3, 5) |
+| C1815 | CH `levenshteinLte` | chSamples, `name levenshteinLte { text: 'Alphb', maxDistance: 2 }` | 1 row (id 1, distance 1) — `editDistance()` function |
+
+#### 19.1.2 Array Operators
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1816 | CH `arrayContains` string[] | chSamples, `tags arrayContains 'fast'` | 3 rows (ids 1, 3, 5) — `has()` function |
+| C1817 | CH `arrayContainsAll` | chSamples, `tags arrayContainsAll ['fast', 'new']` | 2 rows (ids 1, 5) — `hasAll()` function |
+| C1818 | CH `arrayContainsAny` | chSamples, `tags arrayContainsAny ['slow', 'new']` | 3 rows (ids 1, 2, 5) — `hasAny()` function |
+| C1819 | CH `arrayIsEmpty` | chSamples, `scores arrayIsEmpty` | 1 row (id 4) — `empty()` function |
+| C1820 | CH `arrayIsNotEmpty` | chSamples, `scores arrayIsNotEmpty` | 3 rows (ids 1, 2, 5) — `NOT empty()` |
+| C1821 | CH `arrayContains` int[] | chSamples, `scores arrayContains 1` | 2 rows (ids 1, 5) — `has()` on int array |
+
+#### 19.1.3 Filter Groups & Column Filter
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1822 | CH OR filter group | chSamples, `(status = 'active' OR status = 'paid')` | 3 rows (ids 1, 2, 4) |
+| C1823 | CH NOT filter group | chSamples, `NOT (status = 'cancelled')` | 4 rows |
+| C1824 | CH column-vs-column | chSamples, `amount > discount` (QueryColumnFilter) | 3 rows (ids 1, 3, 5 — rows with non-null discount where amount > discount) |
+
+#### 19.1.4 Aggregation, GROUP BY, HAVING
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1825 | CH COUNT(*) | chSamples, COUNT(*) as cnt | `cnt >= 5` |
+| C1826 | CH SUM + GROUP BY | chSamples, groupBy: [status], SUM(amount) as totalAmt | grouped sums per status |
+| C1827 | CH HAVING | chSamples GROUP BY status, SUM(amount) as totalAmt, HAVING totalAmt > 100 | only groups where sum > 100 |
+| C1828 | CH AVG | chSamples, AVG(amount) as avgAmt | decimal result |
+
+#### 19.1.5 ORDER BY, LIMIT, DISTINCT, byIds
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1829 | CH ORDER BY + LIMIT + OFFSET | chSamples, orderBy: amount asc, limit: 2, offset: 1 | 2 rows starting from 2nd-lowest amount |
+| C1830 | CH DISTINCT | chSamples, columns: [status], distinct: true | 4 unique statuses (active, paid, cancelled, shipped) |
+| C1831 | CH byIds | chSamples, `byIds: [1, 2]` | 2 rows — `IN tuple({p1:Int32}, {p2:Int32})` |
+
+### 19.2 Trino Operators
+
+All tests use `chSamples JOIN samples` (ch-analytics + pg-main → cross-DB → **Trino executor**). The join is a 1:1 mirror (`chSamples.id = samples.id`), so single-table assertions remain valid. Filters target `chSamples` columns, exercising Trino's `?` positional parameterization, `"catalog"."schema"."table"` fully-qualified naming, `ESCAPE '\\'` for LIKE operators, and dialect-specific functions (`contains()`, `arrays_overlap()`, `array_except()`, `levenshtein_distance()`).
+
+#### 19.2.1 Comparison & Pattern
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1840 | Trino `=` string | chSamples JOIN samples, `chSamples.status = 'active'` | 2 rows; `meta.strategy === 'trino-cross-db'` |
+| C1841 | Trino `!=` | chSamples JOIN samples, `chSamples.status != 'cancelled'` | 4 rows |
+| C1842 | Trino `>` decimal | chSamples JOIN samples, `chSamples.amount > 100` | 3 rows |
+| C1843 | Trino `like` | chSamples JOIN samples, `chSamples.email like '%@test%'` | 5 rows — `LIKE ? ESCAPE '\\\\'` |
+| C1844 | Trino `ilike` | chSamples JOIN samples, `chSamples.email ilike '%TEST%'` | 5 rows — `lower(col) LIKE lower(?) ESCAPE '\\\\'` |
+| C1845 | Trino `contains` | chSamples JOIN samples, `chSamples.email contains 'alpha'` | 1 row — `LIKE ? ESCAPE '\\\\'` with escapeLike |
+| C1846 | Trino `icontains` | chSamples JOIN samples, `chSamples.name icontains 'ALPHA'` | 1 row — `lower()` + LIKE |
+| C1847 | Trino `startsWith` | chSamples JOIN samples, `chSamples.name startsWith 'Al'` | 1 row — `LIKE ? ESCAPE '\\\\'` with prefix |
+| C1848 | Trino `endsWith` | chSamples JOIN samples, `chSamples.email endsWith '@test.com'` | 5 rows — `LIKE ? ESCAPE '\\\\'` with suffix |
+| C1849 | Trino `between` | chSamples JOIN samples, `chSamples.amount between { from: 100, to: 200 }` | 3 rows |
+| C1850 | Trino `notBetween` | chSamples JOIN samples, `chSamples.amount notBetween { from: 100, to: 200 }` | 2 rows |
+| C1851 | Trino `in` | chSamples JOIN samples, `chSamples.status in ['active', 'paid']` | 3 rows — `IN (?, ?)` |
+| C1852 | Trino `notIn` | chSamples JOIN samples, `chSamples.status notIn ['cancelled']` | 4 rows |
+| C1853 | Trino `isNull` | chSamples JOIN samples, `chSamples.discount isNull` | 2 rows |
+| C1854 | Trino `isNotNull` | chSamples JOIN samples, `chSamples.discount isNotNull` | 3 rows |
+| C1855 | Trino `levenshteinLte` | chSamples JOIN samples, `chSamples.name levenshteinLte { text: 'Alphb', maxDistance: 2 }` | 1 row — `levenshtein_distance()` |
+
+#### 19.2.2 Array Operators
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1856 | Trino `arrayContains` string[] | chSamples JOIN samples, `chSamples.tags arrayContains 'fast'` | 3 rows — `contains()` function |
+| C1857 | Trino `arrayContainsAll` | chSamples JOIN samples, `chSamples.tags arrayContainsAll ['fast', 'new']` | 2 rows — `cardinality(array_except(...)) = 0` |
+| C1858 | Trino `arrayContainsAny` | chSamples JOIN samples, `chSamples.tags arrayContainsAny ['slow', 'new']` | 3 rows — `arrays_overlap()` |
+| C1859 | Trino `arrayIsEmpty` | chSamples JOIN samples, `chSamples.scores arrayIsEmpty` | 1 row — `cardinality(col) = 0` |
+| C1860 | Trino `arrayIsNotEmpty` | chSamples JOIN samples, `chSamples.scores arrayIsNotEmpty` | 3 rows — `cardinality(col) > 0` |
+| C1861 | Trino `arrayContains` int[] | chSamples JOIN samples, `chSamples.scores arrayContains 1` | 2 rows |
+
+#### 19.2.3 Filter Groups & Column Filter
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1862 | Trino OR filter group | chSamples JOIN samples, `(chSamples.status = 'active' OR chSamples.status = 'paid')` | 3 rows |
+| C1863 | Trino NOT filter group | chSamples JOIN samples, `NOT (chSamples.status = 'cancelled')` | 4 rows |
+| C1864 | Trino column-vs-column | chSamples JOIN samples, `chSamples.amount > chSamples.discount` (QueryColumnFilter) | 3 rows |
+
+#### 19.2.4 Aggregation, GROUP BY, HAVING
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1865 | Trino COUNT(*) | chSamples JOIN samples, COUNT(*) as cnt | `cnt >= 5` |
+| C1866 | Trino SUM + GROUP BY | chSamples JOIN samples, groupBy: [chSamples.status], SUM(chSamples.amount) as totalAmt | grouped sums |
+| C1867 | Trino HAVING | chSamples JOIN samples GROUP BY status, SUM(amount) as totalAmt, HAVING totalAmt > 100 | only qualifying groups |
+| C1868 | Trino AVG | chSamples JOIN samples, AVG(chSamples.amount) as avgAmt | decimal result |
+
+#### 19.2.5 ORDER BY, LIMIT, DISTINCT, byIds
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1869 | Trino ORDER BY + LIMIT + OFFSET | chSamples JOIN samples, orderBy: chSamples.amount asc, limit: 2, offset: 1 | 2 rows |
+| C1870 | Trino DISTINCT | chSamples JOIN samples, columns: [chSamples.status], distinct: true | 4 unique statuses |
+| C1871 | Trino byIds | chSamples JOIN samples, `byIds: [1, 2]` on chSamples | 2 rows — `IN (?, ?)` |
+
+---
+
 ## Implementation Checklist
 
 For implementation developers, verify the following groups pass in order:
@@ -1061,8 +1252,9 @@ For implementation developers, verify the following groups pass in order:
 20. **Lifecycle** (C1310-C1313) — reload metadata/roles, close
 21. **SQL Injection** (C1400-C1465) — per-dialect parameterization, identifier validation, alias escaping, enum-keyword validation
 22. **Edge Cases** (C1700-C1716) — nulls, types, strategies, freshness, distinct+count, empty groups
+23. **Per-Dialect Operators** (C1800-C1871) — ClickHouse and Trino correctness via mirror tables
 
-Total: **401 contract tests**
+Total: **465 contract tests**
 
 ---
 
