@@ -7,7 +7,7 @@ This document defines the **full contract test suite** for any implementation of
 - `POST /validate/query` — accepts `{ definition, context }`, returns `{ valid: true }` or throws `ValidationError` (400)
 - `POST /validate/config` — accepts `{ metadata, roles }`, returns `{ valid: true }` or throws `ConfigError` (400)
 
-The validation endpoints require **no database connections** — they run pure validation logic only. This means all validation tests (~87 tests in sections 12 and 17) can run without a live database, enabling fast feedback during implementation.
+The validation endpoints require **no database connections** — they run pure validation logic only. This means all validation tests (~90 tests in sections 12 and 17) can run without a live database, enabling fast feedback during implementation.
 
 Any server (TypeScript, Go, Rust, Java, etc.) that wraps a multi-db query engine must pass all tests described here to be considered a conforming implementation.
 
@@ -279,6 +279,8 @@ The implementation must populate tables with deterministic data so assertions on
 ## Test Categories
 
 Tests are organized into categories. Each test has a unique ID for traceability. Tests marked with **(negative)** expect errors.
+
+> **Default role:** Unless stated otherwise, all positive tests use the `admin` role (full access, no masking). Tests that exercise ACL or masking explicitly specify the role.
 
 ---
 
@@ -642,6 +644,8 @@ All tests in this section expect the query to throw `ValidationError` with `code
 | C941 | `arrayContainsAll` empty array | `INVALID_VALUE` |
 | C942 | `arrayContainsAny` type mismatch | `INVALID_VALUE` |
 | C943 | `arrayContainsAll` with null element | `INVALID_VALUE` |
+| C944 | `notIn` with empty array | `INVALID_VALUE` |
+| C945 | `notIn` with type-mismatched elements | `INVALID_VALUE` |
 
 ### 12.4 Column Filter Validity
 
@@ -690,6 +694,7 @@ All tests in this section expect the query to throw `ValidationError` with `code
 |---|---|---|
 | C990 | Empty byIds array | `INVALID_BY_IDS` |
 | C991 | byIds + aggregations | `INVALID_BY_IDS` |
+| C994 | byIds + groupBy | `INVALID_BY_IDS` |
 | C992 | byIds scalar on composite PK: orderItems, `byIds: [1, 2]` (scalar values) | `INVALID_BY_IDS` |
 | C993 | byIds missing key in composite PK: orderItems, `byIds: [{ orderId: 1 }]` | `INVALID_BY_IDS` |
 
@@ -728,7 +733,7 @@ All tests in this section expect the query to throw `ValidationError` with `code
 
 | ID | Test | Assertions |
 |---|---|---|
-| C1030 | Multiple errors collected | `from: 'nonExistentTable'`, column: 'bad', filter on 'missing' | `errors[]` contains multiple entries; all issues reported at once |
+| C1030 | Multiple errors collected: `from: 'nonExistentTable'`, column: `'bad'`, filter on `'missing'` | `errors[]` contains multiple entries; all issues reported at once |
 
 ---
 
@@ -872,7 +877,7 @@ For implementation developers, verify the following groups pass in order:
 17. **SQL Injection** (C1400-C1406) — security
 18. **Edge Cases** (C1700-C1714) — nulls, types, strategies, distinct+count, empty groups
 
-Total: **~286 contract tests**
+Total: **289 contract tests**
 
 ---
 
