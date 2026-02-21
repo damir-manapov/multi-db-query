@@ -1597,7 +1597,20 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         }
       })
 
-      // C1110 skipped: cross-DB meta.targetDatabase requires Trino
+      it('C1110: meta.targetDatabase for cross-DB query', async () => {
+        const r = await engine.query({
+          definition: {
+            from: 'events',
+            columns: ['id'],
+            joins: [{ table: 'users' }],
+          },
+          context: admin,
+        })
+        if (r.kind === 'data') {
+          // cross-DB join routes through Trino
+          expect(r.meta.targetDatabase).toBeDefined()
+        }
+      })
 
       it('C1111: meta.dialect in sql-only mode', async () => {
         const r = await engine.query({ definition: { from: 'orders', executeMode: 'sql-only' }, context: admin })
@@ -1634,6 +1647,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
     const dialectVariants = [
       { variant: 'pg', samples: 'samples', sampleItems: 'sampleItems', sampleDetails: 'sampleDetails' },
       { variant: 'ch', samples: 'chSamples', sampleItems: 'chSampleItems', sampleDetails: 'chSampleDetails' },
+      { variant: 'trino', samples: 'chSamples', sampleItems: 'chSampleItems', sampleDetails: 'chSampleDetails' },
     ] as const
 
     describe.each(dialectVariants)('$variant dialect', ({ samples, sampleItems, sampleDetails }) => {
