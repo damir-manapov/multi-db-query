@@ -915,7 +915,7 @@ These tests exercise `PlannerError` (HTTP 422) scenarios where a valid query can
 | C1250 | Cross-DB join with Trino disabled | events JOIN users (ch-analytics + pg-main), Trino config: `{ enabled: false }` | `PlannerError` with `code: 'TRINO_DISABLED'`, HTTP 422 |
 | C1251 | Cross-DB join, DB missing trinoCatalog | events JOIN users, `ch-analytics` has no `trinoCatalog` configured | `PlannerError` with `code: 'NO_CATALOG'`, HTTP 422 |
 | C1252 | Cross-DB tables, no sync, no trino | events JOIN users, Trino disabled, no Debezium sync between DBs | `PlannerError` with `code: 'UNREACHABLE_TABLES'`, HTTP 422 |
-| C1253 | Freshness conflict with replica lag | orders (admin), `freshness: 'realtime'`, orders_replica has `estimatedLag: 'seconds'` | `PlannerError` with `code: 'FRESHNESS_UNMET'`, HTTP 422 — `'realtime'` always rejects materialized replicas |
+| C1253 | Freshness conflict with replica lag | orders (admin), `freshness: 'realtime'`, **pg-main executor removed** (only materialized replica available), orders_replica has `estimatedLag: 'seconds'` | `PlannerError` with `code: 'FRESHNESS_UNMET'`, HTTP 422 — `'realtime'` rejects materialized replicas and no original source is available |
 | C1254 | Freshness `'seconds'` accepts `'seconds'` lag | orders (admin), `freshness: 'seconds'` | `meta.strategy === 'materialized'` — replica lag matches required freshness |
 
 ---
@@ -999,16 +999,16 @@ Aggregation aliases are user-provided strings interpolated into SQL as quoted id
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C1412 | PG alias with double-quote injection | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; DROP TABLE orders;--' }]` | `INVALID_AGGREGATION` validation error **or** alias safely escaped in generated SQL; no SQL injection |
-| C1413 | PG alias with backtick injection | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x`; DROP TABLE orders;--' }]` | same: rejected or escaped; no injection |
-| C1414 | PG HAVING referencing injected alias | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; --' }]`, `having: [{ alias: 'x"; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in HAVING clause |
-| C1415 | PG ORDER BY referencing injected alias | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; --' }]`, `orderBy: [{ column: 'x"; --', direction: 'asc' }]` | rejected or escaped; no injection in ORDER BY clause |
-| C1419 | CH alias with backtick injection | events, `aggregations: [{ column: 'timestamp', function: 'count', alias: 'x`; DROP TABLE events;--' }]` | rejected or backtick escaped in `` `alias` `` quoting; no injection |
-| C1448 | CH HAVING referencing backtick-injected alias | events, `aggregations: [{ column: 'timestamp', function: 'count', alias: 'x`; --' }]`, `having: [{ alias: 'x`; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in `` `alias` `` HAVING clause |
-| C1449 | CH ORDER BY referencing backtick-injected alias | events, `aggregations: [{ column: 'timestamp', function: 'count', alias: 'x`; --' }]`, `orderBy: [{ column: 'x`; --', direction: 'asc' }]` | rejected or escaped; no injection in `` `alias` `` ORDER BY clause |
-| C1422 | Trino alias with double-quote injection | events JOIN users (cross-DB), `aggregations: [{ column: 'id', table: 'users', function: 'count', alias: 'x"; DROP TABLE users;--' }]` | rejected or double-quote escaped; no injection |
-| C1450 | Trino HAVING referencing injected alias | events JOIN users, `aggregations: [{ column: 'id', table: 'users', function: 'count', alias: 'x"; --' }]`, `having: [{ alias: 'x"; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in Trino HAVING clause |
-| C1451 | Trino ORDER BY referencing injected alias | events JOIN users, `aggregations: [{ column: 'id', table: 'users', function: 'count', alias: 'x"; --' }]`, `orderBy: [{ column: 'x"; --', direction: 'asc' }]` | rejected or escaped; no injection in Trino ORDER BY clause |
+| C1412 | PG alias with double-quote injection | orders, `aggregations: [{ column: 'total', fn: 'sum', alias: 'x"; DROP TABLE orders;--' }]` | `INVALID_AGGREGATION` validation error **or** alias safely escaped in generated SQL; no SQL injection |
+| C1413 | PG alias with backtick injection | orders, `aggregations: [{ column: 'total', fn: 'sum', alias: 'x`; DROP TABLE orders;--' }]` | same: rejected or escaped; no injection |
+| C1414 | PG HAVING referencing injected alias | orders, `aggregations: [{ column: 'total', fn: 'sum', alias: 'x"; --' }]`, `having: [{ alias: 'x"; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in HAVING clause |
+| C1415 | PG ORDER BY referencing injected alias | orders, `aggregations: [{ column: 'total', fn: 'sum', alias: 'x"; --' }]`, `orderBy: [{ column: 'x"; --', direction: 'asc' }]` | rejected or escaped; no injection in ORDER BY clause |
+| C1419 | CH alias with backtick injection | events, `aggregations: [{ column: 'timestamp', fn: 'count', alias: 'x`; DROP TABLE events;--' }]` | rejected or backtick escaped in `` `alias` `` quoting; no injection |
+| C1448 | CH HAVING referencing backtick-injected alias | events, `aggregations: [{ column: 'timestamp', fn: 'count', alias: 'x`; --' }]`, `having: [{ alias: 'x`; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in `` `alias` `` HAVING clause |
+| C1449 | CH ORDER BY referencing backtick-injected alias | events, `aggregations: [{ column: 'timestamp', fn: 'count', alias: 'x`; --' }]`, `orderBy: [{ column: 'x`; --', direction: 'asc' }]` | rejected or escaped; no injection in `` `alias` `` ORDER BY clause |
+| C1422 | Trino alias with double-quote injection | events JOIN users (cross-DB), `aggregations: [{ column: 'id', table: 'users', fn: 'count', alias: 'x"; DROP TABLE users;--' }]` | rejected or double-quote escaped; no injection |
+| C1450 | Trino HAVING referencing injected alias | events JOIN users, `aggregations: [{ column: 'id', table: 'users', fn: 'count', alias: 'x"; --' }]`, `having: [{ alias: 'x"; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in Trino HAVING clause |
+| C1451 | Trino ORDER BY referencing injected alias | events JOIN users, `aggregations: [{ column: 'id', table: 'users', fn: 'count', alias: 'x"; --' }]`, `orderBy: [{ column: 'x"; --', direction: 'asc' }]` | rejected or escaped; no injection in Trino ORDER BY clause |
 
 ### 16.3 PostgreSQL Filter Value Injection
 
@@ -1148,7 +1148,7 @@ For implementation developers, verify the following groups pass in order:
 2. **Health Check** (C1300-C1304) — server is running and connected
 3. **Execute Modes** (C001-C027) — basic response shapes, sql-only, count
 4. **Debug Mode** (C030-C034) — debug logging works
-5. **Filtering** (C100-C196 × 3 dialects) — all 31 operators + groups + qualifiers
+5. **Filtering** (C100-C196 × 3 dialects) — all 30 operators + groups + qualifiers
 6. **Joins** (C200-C207 × 3 dialects) — left/inner, multi-table, column selection, collision
 7. **Aggregations** (C300-C310 × 3 dialects) — all 5 functions, groupBy interaction, NULLs
 8. **GROUP BY & HAVING** (C320-C329 × 3 dialects) — grouping, HAVING conditions, joined column
