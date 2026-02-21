@@ -698,13 +698,13 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C806 | sql-only reports masking intent | orders columns: [id, total], executeMode: 'sql-only' (tenant-user) | `meta.columns.find(c => c.apiName === 'total').masked === true` — no data, but intent reported |
 | C807 | Multi-role masking (union unmasks) | orders, `user: ['tenant-user', 'admin']` | admin provides unmasked access → `total.masked === false` (union within scope: most permissive wins) |
 | C808 | Cross-scope masking preserved | orders columns: [id, total], `user: ['admin'], service: ['reporting-service']` | `total.masked === true` (admin unmasks, reporting-service masks total → intersection: stays masked) |
-| C809 | Masked value (phone) | users columns: [id, phone] (analyst) | phone is masked: e.g. `+1***890` (phone masking → country code + first digit + `***` + last 3 digits) |
+| C809 | Masked value (phone) | users columns: [id, phone] (analyst) | phone is masked: e.g. `+1***890` (phone masking → country code + `***` + last 3 digits) |
 | C810 | Masked value (name) | users columns: [id, firstName, lastName] (analyst) | firstName/lastName masked: e.g. `A***e` / `S***h` (name masking → first char + stars + last char) |
 | C811 | Masked value (number on price) | products columns: [id, price] (analyst) | `data[0].price === 0` (number masking on price) |
 | C812 | Masked value (number on amount) | invoices columns: [id, amount] (analyst) | `data[0].amount === 0` (number masking on amount) |
 | C813 | Multiple masking functions in one query | users columns: [id, email, phone, firstName] (analyst) | email: `false` (analyst has no email masking); phone: `true`; firstName: `true` — different functions on different columns |
 | C814 | Masked value (date) | orders columns: [id, createdAt] (analyst) | `createdAt` is masked: e.g. `'2024-01-01'` (date masking → year + `-01-01`, no time component) |
-| C815 | Masking on null value | orders columns: [id, discount] (tenant-user) | null `discount` remains `null` — masking is skipped for null/undefined values |
+| C815 | Masking on null value | orders columns: [id, internalNote] (analyst) | rows where `internalNote` is null (orders 2, 4) remain `null` — masking (`full`) is skipped for null/undefined values |
 | C816 | Masked value (uuid) | orders columns: [id, customerId] (analyst) | `customerId` masked: e.g. `a1b2****` (first 4 hex chars + `****`) |
 
 ---
@@ -1156,7 +1156,7 @@ For implementation developers, verify the following groups pass in order:
 10. **byIds** (C500-C507 × 3 dialects, C505 pg-only) — primary key shortcut, composite PK rejection
 11. **EXISTS** (C600-C613 × 3 dialects) — subqueries, all 6 counted operators, self-referencing, nested, join combo
 12. **Access Control** (C700-C723) — roles, scopes, intersection, joined table access
-13. **Masking** (C800-C816) — all 8 masking functions (+ null pass-through), multi-role, cross-scope
+13. **Masking** (C800-C816) — all 7 masking functions (number, full, email, phone, name, date, uuid + null pass-through), multi-role, cross-scope
 14. **Validation Errors** (C900-C1030) — all 14 rules verified (via /query)
 15. **Meta Verification** (C1100-C1113) — response metadata, targetDatabase, dialect per mode, agg nullable
 16. **Error Deserialization** (C1200-C1206) — HTTP error transport, all error types
@@ -1167,7 +1167,7 @@ For implementation developers, verify the following groups pass in order:
 21. **SQL Injection** (C1400-C1465) — per-dialect parameterization, identifier validation, alias escaping, enum-keyword validation
 22. **Edge Cases** (C1700-C1716) — nulls, types, strategies, freshness, distinct+count, empty groups
 
-Total: **401 unique test IDs** × parameterization = ~**590 test executions** (sections 3–9: 95 IDs × 3 dialects + C505 × 1 = 286; other sections: 306 × 1 = 306; total ≈ 592)
+Total: **401 unique test IDs** × parameterization = ~**627 test executions** (sections 3–9: 113 IDs × 3 dialects + C505 × 1 = 340; other sections: 287 × 1 = 287; total = 627)
 
 ---
 
