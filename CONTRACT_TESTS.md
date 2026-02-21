@@ -7,7 +7,7 @@ This document defines the **full contract test suite** for any implementation of
 - `POST /validate/query` — accepts `{ definition, context }`, returns `{ valid: true }` or throws `ValidationError` (400)
 - `POST /validate/config` — accepts `{ metadata, roles }`, returns `{ valid: true }` or throws `ConfigError` (400)
 
-The validation endpoints require **no database connections** — they run pure validation logic only. This means all validation tests (~90 tests in sections 12 and 17) can run without a live database, enabling fast feedback during implementation.
+The validation endpoints require **no database connections** — they run pure validation logic only. This means all validation tests (~100 tests in sections 12 and 17) can run without a live database, enabling fast feedback during implementation.
 
 Any server (TypeScript, Go, Rust, Java, etc.) that wraps a multi-db query engine must pass all tests described here to be considered a conforming implementation.
 
@@ -321,6 +321,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C024 | count ignores orderBy, limit, offset | `{ from: 'orders', orderBy: [{ column: 'id', direction: 'asc' }], limit: 2, offset: 1, executeMode: 'count' }`, admin | `kind === 'count'`; `count >= 5` (limit/offset not applied to count) |
 | C025 | count with join | `{ from: 'orders', joins: [{ table: 'products' }], executeMode: 'count' }`, admin | `kind === 'count'`; count reflects joined result set |
 | C026 | count with restricted role | `{ from: 'orders', executeMode: 'count' }`, tenant-user | `kind === 'count'`; ACL applies — restricted role can count rows on an allowed table |
+| C027 | count with zero matching rows | `{ from: 'orders', filters: [{ column: 'status', operator: '=', value: 'nonexistent' }], executeMode: 'count' }` | `kind === 'count'`; `count === 0` |
 
 ---
 
@@ -330,7 +331,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 |---|---|---|---|
 | C030 | debug: true includes debugLog | `{ from: 'orders', columns: ['id'], debug: true }`, admin | `result.debugLog` is array; `length > 0` |
 | C031 | debugLog entries have required fields | same as C030 | each entry: `typeof timestamp === 'number'`; `typeof phase === 'string'`; `typeof message === 'string'` |
-| C032 | debugLog covers pipeline phases | same as C030 | phases include at least `'validation'`, `'planning'`, `'sql-generation'` |
+| C032 | debugLog covers pipeline phases | same as C030 | phases include at least `'validation'`, `'access-control'`, `'planning'`, `'name-resolution'`, `'sql-generation'` (7 total phases: + `'cache'`, `'execution'`) |
 | C033 | debug works with sql-only | `{ from: 'orders', executeMode: 'sql-only', debug: true }`, admin | `kind === 'sql'`; `debugLog` array present |
 | C034 | debug works with count | `{ from: 'orders', executeMode: 'count', debug: true }`, admin | `kind === 'count'`; `debugLog` array present |
 
@@ -348,6 +349,9 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C103 | `<` filter | orders, `total < 200` | all returned `total < 200` |
 | C104 | `>=` filter | orders, `total >= 150` | all returned `total >= 150` |
 | C105 | `<=` filter | orders, `total <= 100` | all returned `total <= 100` |
+| C106 | `=` on boolean column | orders, `isPaid = true` | all returned rows have `isPaid === true` |
+| C107 | `!=` on boolean column | orders, `isPaid != true` | returned rows have `isPaid !== true` (includes `false` and `null`) |
+| C108 | `=` on uuid column | users, `id = 'uuid-c1'` | exactly 1 row returned |
 
 ### 3.2 Pattern Operators (string)
 
@@ -377,6 +381,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C132 | `between` on int | orders, `quantity between { from: 2, to: 5 }` | all `quantity >= 2 && quantity <= 5` |
 | C133 | `between` on timestamp | orders, `createdAt between { from: '2024-01-01...', to: '2024-03-31...' }` | returned rows within range |
 | C134 | `between` on date | invoices, `dueDate between { from: '2024-02-01', to: '2024-04-01' }` | returned rows within range |
+| C135 | `notBetween` on int | orders, `quantity notBetween { from: 2, to: 5 }` | all returned `quantity < 2 or quantity > 5` |
 
 ### 3.4 Set Operators
 
@@ -385,6 +390,8 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C140 | `in` filter | orders, `status in ['active', 'paid']` | all returned statuses are 'active' or 'paid' |
 | C141 | `notIn` filter | orders, `status notIn ['cancelled']` | no returned status is 'cancelled' |
 | C142 | `in` on int column | orders, `quantity in [2, 5, 10]` | all returned quantities in set |
+| C143 | `in` on uuid column | users, `id in ['uuid-c1', 'uuid-c2']` | exactly 2 rows matching |
+| C144 | `in` on decimal column | orders, `total in [100.00, 200.00]` | all returned totals in set |
 
 ### 3.5 Null Operators
 
@@ -513,7 +520,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C502 | byIds with count mode | orders, `byIds: [1, 2, 3]`, `executeMode: 'count'` | `kind === 'count'`; `count === 3` |
 | C503 | byIds with join | orders, `byIds: [1, 2]`, join products | id + product data returned |
 | C504 | byIds with column selection | orders, `byIds: [1]`, columns: [id, status] | only selected columns returned |
-| C505 | byIds with composite PK | orderItems, `byIds: [{ orderId: 1, productId: 'uuid-p1' }, { orderId: 2, productId: 'uuid-p2' }]`, admin | exactly 2 rows matching compound keys |
+| C505 | byIds rejects composite PK **(negative)** | orderItems, `byIds: [{ orderId: 1, productId: 'uuid-p1' }]`, admin | `ValidationError` with `INVALID_BY_IDS` — byIds requires a single-column primary key |
 | C506 | byIds with filter | orders, `byIds: [1, 2, 3]`, `filters: [{ column: 'status', operator: '=', value: 'active' }]`, admin | returns intersection — only order id=1 (active with id in [1,2,3]); order 2 is 'paid', order 3 is 'cancelled' |
 | C507 | byIds with sql-only | orders, `byIds: [1, 2]`, `executeMode: 'sql-only'`, admin | `kind === 'sql'`; `sql` contains `'WHERE'`; `params` includes primary key values |
 
@@ -533,6 +540,10 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C607 | Counted EXISTS ignores `exists` field | orders, `exists: false`, `count: { operator: '>=', value: 1 }` | `exists` is ignored — counted subquery decides direction |
 | C608 | Self-referencing EXISTS | users WHERE EXISTS users (via managerId → users.id) | only users who manage other users (uuid-c1 has subordinates) |
 | C609 | EXISTS with join | orders JOIN products WHERE EXISTS invoices | only orders that have invoices, with product data included |
+| C610 | Counted EXISTS (>) | orders WHERE EXISTS invoices `count: { operator: '>', value: 1 }` | orders with > 1 invoices (order id=1 has 2) |
+| C611 | Counted EXISTS (<) | orders WHERE EXISTS invoices `count: { operator: '<', value: 2 }` | orders with < 2 invoices |
+| C612 | Counted EXISTS (!=) | orders WHERE EXISTS invoices `count: { operator: '!=', value: 0 }` | orders with non-zero invoices |
+| C613 | Counted EXISTS (<=) | orders WHERE EXISTS invoices `count: { operator: '<=', value: 1 }` | orders with ≤ 1 invoices |
 
 ---
 
@@ -549,6 +560,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C704 | Access denied on column **(negative)** | orders columns: [id, internalNote] (tenant-user) | `ValidationError` with `ACCESS_DENIED` |
 | C705 | No-access role **(negative)** | orders (no-access) | `ValidationError` with `ACCESS_DENIED` |
 | C706 | Empty roles array **(negative)** | orders, context: `{ roles: { user: [] } }` | `ValidationError` with `ACCESS_DENIED` (zero roles → zero permissions) |
+| C707 | Access denied on joined table **(negative)** | orders JOIN events (tenant-user) | `ValidationError` with `ACCESS_DENIED` — tenant-user has no access to events table |
 
 ### 10.2 Multi-Role (Union Within Scope)
 
@@ -581,12 +593,14 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C806 | sql-only reports masking intent | orders columns: [id, total], executeMode: 'sql-only' (tenant-user) | `meta.columns.find(c => c.apiName === 'total').masked === true` — no data, but intent reported |
 | C807 | Multi-role masking (union unmasks) | orders, `user: ['tenant-user', 'admin']` | admin provides unmasked access → `total.masked === false` (union within scope: most permissive wins) |
 | C808 | Cross-scope masking preserved | orders columns: [id, total], `user: ['admin'], service: ['reporting-service']` | `total.masked === true` (admin unmasks, reporting-service masks total → intersection: stays masked) |
-| C809 | Masked value (phone) | users columns: [id, phone] (analyst) | phone is masked: e.g. `+1******890` (phone masking → partial reveal) |
-| C810 | Masked value (name) | users columns: [id, firstName, lastName] (analyst) | firstName/lastName masked: e.g. `A***` (name masking → first char + stars) |
+| C809 | Masked value (phone) | users columns: [id, phone] (analyst) | phone is masked: e.g. `+1***890` (phone masking → country code + first digit + `***` + last 3 digits) |
+| C810 | Masked value (name) | users columns: [id, firstName, lastName] (analyst) | firstName/lastName masked: e.g. `A***e` / `S***h` (name masking → first char + stars + last char) |
 | C811 | Masked value (number on price) | products columns: [id, price] (analyst) | `data[0].price === 0` (number masking on price) |
 | C812 | Masked value (number on amount) | invoices columns: [id, amount] (analyst) | `data[0].amount === 0` (number masking on amount) |
 | C813 | Multiple masking functions in one query | users columns: [id, email, phone, firstName] (analyst) | email: `false` (analyst has no email masking); phone: `true`; firstName: `true` — different functions on different columns |
-| C814 | Masked value (date) | orders columns: [id, createdAt] (analyst) | `createdAt` is masked: e.g. `'2024-01-01T00:00:00Z'` (date masking → zero out time/day components) |
+| C814 | Masked value (date) | orders columns: [id, createdAt] (analyst) | `createdAt` is masked: e.g. `'2024-01-01'` (date masking → year + `-01-01`, no time component) |
+| C815 | Masking on null value | orders columns: [id, discount] (tenant-user) | null `discount` remains `null` — masking is skipped for null/undefined values |
+| C816 | Masked value (uuid) | users columns: [id, customerId] via orders join (with uuid masking configured) | uuid masked: e.g. `550e****` (first 4 chars + `****`) |
 
 ---
 
@@ -622,9 +636,11 @@ All tests in this section expect the query to throw `ValidationError` with `code
 | C922 | `notBetween` on boolean column | `INVALID_FILTER` |
 | C923 | `notBetween` on uuid column | `INVALID_FILTER` |
 | C924 | `isNull` on non-nullable column | `INVALID_FILTER` |
-| C925 | `arrayContains` on scalar column | `INVALID_FILTER` |
-| C926 | Scalar operator on array column (e.g. `= 'x'` on `string[]`) | `INVALID_FILTER` |
-| C927 | Filter `table` references non-joined table | `INVALID_FILTER` |
+| C925 | `isNotNull` on non-nullable column | `INVALID_FILTER` |
+| C926 | `arrayContains` on scalar column | `INVALID_FILTER` |
+| C927 | Scalar operator on array column (e.g. `= 'x'` on `string[]`) | `INVALID_FILTER` |
+| C928 | Filter `table` references non-joined table | `INVALID_FILTER` |
+| C929 | Filter on access-denied column (tenant-user filtering on `internalNote`) | `ACCESS_DENIED` |
 
 ### 12.3 Value Validity
 
@@ -646,6 +662,8 @@ All tests in this section expect the query to throw `ValidationError` with `code
 | C943 | `arrayContainsAll` with null element | `INVALID_VALUE` |
 | C944 | `notIn` with empty array | `INVALID_VALUE` |
 | C945 | `notIn` with type-mismatched elements | `INVALID_VALUE` |
+| C946 | `between` missing `from` | `INVALID_VALUE` |
+| C947 | `levenshteinLte` missing `text` field | `INVALID_VALUE` |
 
 ### 12.4 Column Filter Validity
 
@@ -661,6 +679,7 @@ All tests in this section expect the query to throw `ValidationError` with `code
 | ID | Test | Expected error code |
 |---|---|---|
 | C960 | Join with no relation defined | `INVALID_JOIN` |
+| C961 | Join to table with no role access | `ACCESS_DENIED` |
 
 ### 12.6 GroupBy Validity
 
@@ -668,6 +687,7 @@ All tests in this section expect the query to throw `ValidationError` with `code
 |---|---|---|
 | C970 | Column in SELECT not in groupBy | `INVALID_GROUP_BY` |
 | C971 | Array column in groupBy | `INVALID_GROUP_BY` |
+| C972 | GroupBy `table` references non-joined table | `INVALID_GROUP_BY` |
 
 ### 12.7 Having Validity
 
@@ -687,6 +707,7 @@ All tests in this section expect the query to throw `ValidationError` with `code
 |---|---|---|
 | C985 | orderBy on non-joined table column | `INVALID_ORDER_BY` |
 | C986 | Array column in orderBy | `INVALID_ORDER_BY` |
+| C987 | OrderBy `table` references non-joined table | `INVALID_ORDER_BY` |
 
 ### 12.9 byIds Validity
 
@@ -694,9 +715,9 @@ All tests in this section expect the query to throw `ValidationError` with `code
 |---|---|---|
 | C990 | Empty byIds array | `INVALID_BY_IDS` |
 | C991 | byIds + aggregations | `INVALID_BY_IDS` |
-| C994 | byIds + groupBy | `INVALID_BY_IDS` |
 | C992 | byIds scalar on composite PK: orderItems, `byIds: [1, 2]` (scalar values) | `INVALID_BY_IDS` |
 | C993 | byIds missing key in composite PK: orderItems, `byIds: [{ orderId: 1 }]` | `INVALID_BY_IDS` |
+| C994 | byIds + groupBy | `INVALID_BY_IDS` |
 
 ### 12.10 Limit/Offset Validity
 
@@ -704,6 +725,8 @@ All tests in this section expect the query to throw `ValidationError` with `code
 |---|---|---|
 | C995 | Negative limit | `INVALID_LIMIT` |
 | C996 | Offset without limit | `INVALID_LIMIT` |
+| C997 | Negative offset | `INVALID_LIMIT` |
+| C998 | Fractional limit (e.g., `2.5`) | `INVALID_LIMIT` |
 
 ### 12.11 Aggregation Validity
 
@@ -713,6 +736,8 @@ All tests in this section expect the query to throw `ValidationError` with `code
 | C1001 | Alias collides with column apiName | `INVALID_AGGREGATION` |
 | C1002 | Empty columns `[]` without aggregations | `INVALID_AGGREGATION` |
 | C1003 | SUM on array column | `INVALID_AGGREGATION` |
+| C1004 | Aggregation `table` references non-joined table | `INVALID_AGGREGATION` |
+| C1005 | Aggregation column doesn't exist | `UNKNOWN_COLUMN` |
 
 ### 12.12 EXISTS Validity
 
@@ -752,6 +777,11 @@ Detailed assertions on `QueryResultMeta` structure beyond basic checks.
 | C1106 | meta.tablesUsed for join | orders JOIN products | 2 entries |
 | C1107 | meta.columns for count mode | orders count | `meta.columns` is empty array |
 | C1108 | meta.dialect present (data mode) | orders | `meta.dialect` is one of `'postgres'`, `'clickhouse'`, `'trino'` |
+| C1109 | meta.targetDatabase for direct query | orders (admin) | `meta.targetDatabase === 'pg-main'` |
+| C1110 | meta.targetDatabase for cross-DB query | events JOIN users (admin) | `meta.targetDatabase` reflects Trino (the executor used) |
+| C1111 | meta.dialect in sql-only mode | orders, `executeMode: 'sql-only'` | `meta.dialect` is present (same as data mode) |
+| C1112 | meta.dialect in count mode | orders, `executeMode: 'count'` | `meta.dialect` is present |
+| C1113 | Aggregation nullable inference | orders, SUM(discount) as discountSum | `meta.columns.find(c => c.apiName === 'discountSum').nullable === true` — nullable source column produces nullable aggregation |
 
 ---
 
@@ -764,9 +794,48 @@ These tests verify that errors transmitted over HTTP are properly reconstructed 
 | C1200 | ValidationError via HTTP | server returns 400 with ValidationError body | client throws `ValidationError`; `instanceof ValidationError === true`; `code === 'VALIDATION_FAILED'`; `errors[]` array present with individual issues |
 | C1201 | ValidationError preserves fromTable | same as C1200 | `error.fromTable` matches the query's `from` table |
 | C1202 | PlannerError via HTTP | server returns 422 with PlannerError body | client throws `PlannerError`; `code` is correct (e.g. `UNREACHABLE_TABLES`) |
-| C1203 | ExecutionError via HTTP | server returns 500 | client throws `ExecutionError`; `code` is correct |
+| C1203 | ExecutionError via HTTP | server returns 500 | client throws `ExecutionError`; `code` is correct (e.g. `QUERY_FAILED`) |
 | C1204 | ConnectionError on network failure | server unreachable | `ConnectionError` with `code: 'NETWORK_ERROR'` |
 | C1205 | ConnectionError on timeout | slow server, `timeout: 100ms` in client | `ConnectionError` with `code: 'REQUEST_TIMEOUT'` |
+| C1206 | ProviderError via HTTP | server returns 503 with ProviderError body | client throws `ProviderError`; `code: 'METADATA_LOAD_FAILED'` or `'ROLE_LOAD_FAILED'` |
+
+---
+
+## 14b. Planner Errors
+
+These tests exercise `PlannerError` (HTTP 422) scenarios where a valid query cannot be executed due to infrastructure constraints.
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1250 | Cross-DB join with Trino disabled | events JOIN users (ch-analytics + pg-main), Trino config: `{ enabled: false }` | `PlannerError` with `code: 'TRINO_DISABLED'`, HTTP 422 |
+| C1251 | Cross-DB join, DB missing trinoCatalog | events JOIN users, `ch-analytics` has no `trinoCatalog` configured | `PlannerError` with `code: 'NO_CATALOG'`, HTTP 422 |
+| C1252 | Cross-DB tables, no sync, no trino | events JOIN users, Trino disabled, no Debezium sync between DBs | `PlannerError` with `code: 'UNREACHABLE_TABLES'`, HTTP 422 |
+| C1253 | Freshness conflict with replica lag | orders (admin), `freshness: 'realtime'`, orders_replica has `estimatedLag: 'seconds'` | `PlannerError` with `code: 'FRESHNESS_UNMET'`, HTTP 422 — `'realtime'` always rejects materialized replicas |
+| C1254 | Freshness `'seconds'` accepts `'seconds'` lag | orders (admin), `freshness: 'seconds'` | `meta.strategy === 'materialized'` — replica lag matches required freshness |
+
+---
+
+## 14c. Execution Errors
+
+These tests exercise `ExecutionError` (HTTP 500) scenarios where SQL generation succeeds but execution fails.
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1260 | Missing executor | query targets a database with no configured executor | `ExecutionError` with `code: 'EXECUTOR_MISSING'`, HTTP 500 |
+| C1261 | Missing cache provider | `byIds` query on cached table, cache provider not configured | `ExecutionError` with `code: 'CACHE_PROVIDER_MISSING'`, HTTP 500 |
+| C1262 | Query execution failure | query against a database that returns an error (e.g., table dropped) | `ExecutionError` with `code: 'QUERY_FAILED'`, HTTP 500 |
+| C1263 | Query timeout | query against slow database, executor timeout exceeded | `ExecutionError` with `code: 'QUERY_TIMEOUT'`, HTTP 500 |
+
+---
+
+## 14d. Provider Errors
+
+These tests exercise `ProviderError` (HTTP 503) scenarios where metadata or role loading fails.
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1270 | Metadata provider failure | metadata provider throws during load | `ProviderError` with `code: 'METADATA_LOAD_FAILED'`, HTTP 503 |
+| C1271 | Role provider failure | role provider throws during load | `ProviderError` with `code: 'ROLE_LOAD_FAILED'`, HTTP 503 |
 
 ---
 
@@ -778,6 +847,20 @@ These tests verify that errors transmitted over HTTP are properly reconstructed 
 | C1301 | Executor keys present | `executors` contains keys matching configured database IDs |
 | C1302 | Each executor has required fields | `healthy: boolean`, `latencyMs: number` |
 | C1303 | Unhealthy executor | stop one DB → `healthy: false` at top level; failed executor has `healthy: false` and `error` string |
+| C1304 | Cache provider in health check | `GET /health` | `cacheProviders` contains `redis-main` with `healthy: boolean`, `latencyMs: number` |
+
+---
+
+## 15b. Lifecycle
+
+These tests verify runtime lifecycle operations. They require the ability to reconfigure the server at test time.
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1310 | Reload metadata makes new table visible | add table to metadata provider, call `reloadMetadata()` | query against new table succeeds |
+| C1311 | Reload metadata failure preserves old config | `reloadMetadata()` with broken provider | old queries still work; new load is rejected |
+| C1312 | Reload roles updates permissions | add new role via provider, call `reloadRoles()` | query with new role succeeds |
+| C1313 | Close prevents further queries | call `close()`, then query | `ExecutionError` with `code: 'EXECUTOR_MISSING'` |
 
 ---
 
@@ -921,6 +1004,10 @@ These tests verify the dedicated validation endpoints that run without DB connec
 | C1626 | Invalid cache config | POST `/validate/config` with CacheMeta referencing missing table | 400 `ConfigError` with `INVALID_CACHE` |
 | C1627 | Multiple config errors | POST `/validate/config` with multiple issues | 400 `ConfigError` with multiple `errors[]` entries |
 | C1628 | Duplicate column apiName | POST `/validate/config` with two columns same apiName in one table | 400 `ConfigError` with `DUPLICATE_API_NAME` |
+| C1629 | apiName starting with uppercase | POST `/validate/config` with table apiName `'Orders'` | 400 `ConfigError` with `INVALID_API_NAME` — must match `^[a-z][a-zA-Z0-9]*$` |
+| C1630 | apiName with underscore | POST `/validate/config` with table apiName `'order_items'` | 400 `ConfigError` with `INVALID_API_NAME` — underscores not allowed |
+| C1631 | Relation source column doesn't exist | POST `/validate/config` with relation `from` referencing non-existent column | 400 `ConfigError` with `INVALID_RELATION` |
+| C1632 | Relation target column doesn't exist | POST `/validate/config` with relation `to` referencing non-existent column in target table | 400 `ConfigError` with `INVALID_RELATION` |
 
 ---
 
@@ -939,10 +1026,12 @@ These tests verify the dedicated validation endpoints that run without DB connec
 | C1708 | Decimal precision | orders columns: [total] | `total` is a number with decimal precision preserved |
 | C1709 | Multiple filters (implicit AND) | orders, 2 top-level filters | both filter conditions applied (AND logic) |
 | C1710 | Cache strategy reported | users, `byIds: ['uuid-c1']` (admin) | `meta.strategy === 'cache'` — users table has `redis-main` cache configured |
-| C1711 | Materialized replica query | orders (admin), `preferStrategy: 'materialized'` | `meta.strategy === 'materialized'`; `meta.tablesUsed[0].source === 'replica'` — planner routes to Debezium-synced `orders_replica` on ch-analytics |
+| C1711 | Materialized replica query | orders (admin), `freshness: 'seconds'` | `meta.strategy === 'materialized'`; `meta.tablesUsed[0].source === 'replica'` — planner routes to Debezium-synced `orders_replica` on ch-analytics (sync lag is `'seconds'`, freshness allows it) |
 | C1712 | Cross-DB Trino join | events JOIN users (ch-analytics + pg-main, admin) | `meta.strategy === 'trino-cross-db'` — Trino used to join across databases |
 | C1713 | DISTINCT + count mode | orders, `distinct: true, columns: [status], executeMode: 'count'` | `kind === 'count'`; count equals number of distinct statuses (4: active, paid, cancelled, shipped) |
 | C1714 | GROUP BY with zero matching rows | orders, `status = 'nonexistent'`, groupBy: [status], SUM(total) | `kind === 'data'`; `data` is empty array; `meta.columns` still present |
+| C1715 | Freshness `'realtime'` skips materialized | orders (admin), `freshness: 'realtime'` | `meta.strategy !== 'materialized'` — `'realtime'` always rejects materialized replicas regardless of lag |
+| C1716 | Freshness `'hours'` allows stale replica | orders (admin), `freshness: 'hours'` | `meta.strategy === 'materialized'` — replica lag `'seconds'` is fresher than required `'hours'` |
 
 ---
 
@@ -950,26 +1039,30 @@ These tests verify the dedicated validation endpoints that run without DB connec
 
 For implementation developers, verify the following groups pass in order:
 
-1. **Validation Endpoints** (C1600-C1628) — no DB needed, fast feedback *(start here)*
-2. **Health Check** (C1300-C1303) — server is running and connected
-3. **Execute Modes** (C001-C026) — basic response shapes, sql-only, count
+1. **Validation Endpoints** (C1600-C1632) — no DB needed, fast feedback *(start here)*
+2. **Health Check** (C1300-C1304) — server is running and connected
+3. **Execute Modes** (C001-C027) — basic response shapes, sql-only, count
 4. **Debug Mode** (C030-C034) — debug logging works
 5. **Filtering** (C100-C196) — all 31 operators + groups + qualifiers
 6. **Joins** (C200-C207) — left/inner, multi-table, column selection
 7. **Aggregations** (C300-C310) — all 5 functions, groupBy interaction, NULLs
 8. **GROUP BY & HAVING** (C320-C329) — grouping, HAVING conditions, joined column
 9. **ORDER BY, LIMIT, OFFSET, DISTINCT** (C400-C407) — pagination + sorting
-10. **byIds** (C500-C507) — primary key shortcut, composite keys, filter/sql-only combos
-11. **EXISTS** (C600-C609) — subqueries, counted variant, self-referencing, join combo
-12. **Access Control** (C700-C723) — roles, scopes, intersection
-13. **Masking** (C800-C814) — all 7 masking functions, multi-role, cross-scope
+10. **byIds** (C500-C507) — primary key shortcut, rejection of composite PK, filter/sql-only combos
+11. **EXISTS** (C600-C613) — subqueries, all 6 counted operators, self-referencing, join combo
+12. **Access Control** (C700-C723) — roles, scopes, intersection, joined table access
+13. **Masking** (C800-C816) — all 8 masking functions (+ null pass-through), multi-role, cross-scope
 14. **Validation Errors** (C900-C1030) — all 14 rules verified (via /query)
-15. **Meta Verification** (C1100-C1108) — response metadata correctness
-16. **Error Deserialization** (C1200-C1205) — HTTP error transport
-17. **SQL Injection** (C1400-C1465) — per-dialect parameterization, identifier validation, alias escaping, enum-keyword validation
-18. **Edge Cases** (C1700-C1714) — nulls, types, strategies, distinct+count, empty groups
+15. **Meta Verification** (C1100-C1113) — response metadata, targetDatabase, dialect per mode, agg nullable
+16. **Error Deserialization** (C1200-C1206) — HTTP error transport, all error types
+17. **Planner Errors** (C1250-C1254) — Trino disabled, no catalog, unreachable, freshness
+18. **Execution Errors** (C1260-C1263) — missing executor/cache, query failure, timeout
+19. **Provider Errors** (C1270-C1271) — metadata/role load failure
+20. **Lifecycle** (C1310-C1313) — reload metadata/roles, close
+21. **SQL Injection** (C1400-C1465) — per-dialect parameterization, identifier validation, alias escaping, enum-keyword validation
+22. **Edge Cases** (C1700-C1716) — nulls, types, strategies, freshness, distinct+count, empty groups
 
-Total: **348 contract tests**
+Total: **401 contract tests**
 
 ---
 
