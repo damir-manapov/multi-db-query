@@ -787,14 +787,13 @@ These tests verify that user-provided inputs — filter values, column/table nam
 
 ### 16.1 Identifier & Structural Injection (dialect-agnostic)
 
-Column names, table names, and EXISTS references are validated against metadata **before** reaching any dialect's SQL generator. These checks are identical across all dialects.
+Column names, table names, and EXISTS references are validated against metadata **before** reaching any dialect's SQL generator. These tests can run via `POST /validate/query` (no database connection needed) — the validation layer rejects them identically regardless of which dialect would have been used. The table names in definitions (`orders`, `users`) only need to exist in metadata; no SQL is ever generated.
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C1404 | SQL injection in column name | orders, `columns: ['id"; DROP TABLE orders; --']` | `UNKNOWN_COLUMN` error (not executed as SQL) |
-| C1405 | SQL injection in table name | `from: 'orders; DROP TABLE orders'` | `UNKNOWN_TABLE` error |
-| C1410 | SQL injection in `byIds` values | users, `byIds: ["'; DROP TABLE users; --"]` | values parameterized (treated as `in` filter on PK); no injection |
-| C1411 | SQL injection in EXISTS table name | orders with `exists: { table: "users; DROP TABLE users", on: { left: 'customerId', right: 'id' } }` | `UNKNOWN_TABLE` error |
+| C1404 | SQL injection in column name | `POST /validate/query`: orders, `columns: ['id"; DROP TABLE orders; --']` | `UNKNOWN_COLUMN` validation error (rejected before SQL generation) |
+| C1405 | SQL injection in table name | `POST /validate/query`: `from: 'orders; DROP TABLE orders'` | `UNKNOWN_TABLE` validation error |
+| C1411 | SQL injection in EXISTS table name | `POST /validate/query`: orders with `exists: { table: "users; DROP TABLE users", on: { left: 'customerId', right: 'id' } }` | `UNKNOWN_TABLE` validation error |
 
 ### 16.2 Aggregation Alias Injection (all dialects)
 
@@ -828,6 +827,7 @@ These tests target pg-main tables, exercising PostgreSQL's `$N` parameterization
 | C1433 | PG `endsWith` injection | users, `email endsWith "'; DROP TABLE users; --"` | `LIKE $1` with `%escaped` pattern; parameterized; no injection |
 | C1434 | PG `arrayContainsAll` injection | products, `labels arrayContainsAll ["sale'; DROP TABLE products; --"]` | `col @> $1::text[]` — PG array containment operator; no injection |
 | C1435 | PG `arrayContainsAny` injection | products, `labels arrayContainsAny ["sale'; DROP TABLE products; --"]` | `col && $1::text[]` — PG array overlap operator; no injection |
+| C1410 | PG `byIds` injection | users, `byIds: ["'; DROP TABLE users; --"]` | resolved as `= ANY($1::uuid[])` on PK; value parameterized; no injection |
 
 ### 16.4 ClickHouse Filter Value Injection
 
