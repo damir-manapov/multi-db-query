@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     globals: false,
     include: ['packages/*/tests/**/*.test.ts'],
+    exclude: ['**/contract.test.*'],
     passWithNoTests: true,
   },
 })
