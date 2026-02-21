@@ -820,17 +820,32 @@ Aggregation aliases are user-provided strings interpolated into SQL as quoted id
 
 ### 16.4 Dialect-Specific Injection
 
-Tests 16.1–16.3 target pg-main tables, so only the **PostgreSQL** dialect's parameterization (`$N`) and quoting (`"identifier"`) is exercised. This subsection ensures the **ClickHouse** (typed `{pN:Type}` params, `` `identifier` `` quoting) and **Trino** (`?` params, multi-catalog `"catalog"."schema"."table"` quoting) code paths are also injection-resistant.
+Tests 16.1–16.3 target pg-main tables, so only the **PostgreSQL** dialect's parameterization (`$N`) and quoting (`"identifier"`) is exercised. This subsection ensures the **ClickHouse** (typed `{pN:Type}` params, `` `identifier` `` quoting) and **Trino** (`?` params, multi-catalog `"catalog"."schema"."table"` quoting) code paths are also injection-resistant. Tests focus on operators whose SQL generation is **materially different** per dialect.
+
+#### ClickHouse
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C1416 | ClickHouse `=` filter injection | events (ch-analytics), `type = "'; DROP TABLE events; --"` | value parameterized via `{pN:String}`; no injection |
-| C1417 | ClickHouse `in` filter injection | events, `tags arrayContainsAny ["x'; DROP TABLE events; --"]` | array values parameterized; no injection |
-| C1418 | ClickHouse column name injection | events, `columns: ['id`; DROP TABLE events; --']` | `UNKNOWN_COLUMN` error |
-| C1419 | ClickHouse aggregation alias injection | events, `aggregations: [{ column: 'timestamp', function: 'count', alias: 'x`; DROP TABLE events;--' }]` | rejected or backtick escaped; no injection |
+| C1416 | CH `=` filter injection | events (ch-analytics), `type = "'; DROP TABLE events; --"` | value parameterized via `{pN:String}`; no injection |
+| C1417 | CH `arrayContainsAny` injection | events, `tags arrayContainsAny ["x'; DROP TABLE events; --"]` | array values parameterized; no injection |
+| C1418 | CH column name injection | events, `columns: ['id`; DROP TABLE events; --']` | `UNKNOWN_COLUMN` error |
+| C1419 | CH aggregation alias injection | events, `aggregations: [{ column: 'timestamp', function: 'count', alias: 'x`; DROP TABLE events;--' }]` | rejected or backtick escaped; no injection |
+| C1423 | CH `in` filter injection | events, `type in ["purchase'; DROP TABLE events; --"]` | expanded `IN tuple({p1:String}, ...)` — each element individually parameterized; no injection |
+| C1424 | CH `contains` filter injection | events, `type contains "'; DROP TABLE events; --"` | escapeLike applied, parameterized via `{pN:String}`; no injection |
+| C1425 | CH `between` filter injection | events, `timestamp between { from: "2024-01-01'; DROP TABLE events; --", to: "2024-12-31" }` | both bounds parameterized via `{p1:DateTime}` and `{p2:DateTime}`; no injection |
+| C1426 | CH `levenshteinLte` injection | events, `type levenshteinLte { text: "'; DROP TABLE events; --", maxDistance: 5 }` | mapped to `editDistance()` function; text via `{pN:String}`, threshold via `{pN:UInt32}`; no injection |
+| C1427 | CH `startsWith` injection | events, `type startsWith "'; DROP TABLE events; --"` | ClickHouse uses native `startsWith()` function (not LIKE); value parameterized via `{pN:String}`; no injection |
+
+#### Trino
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
 | C1420 | Trino cross-DB `=` filter injection | events JOIN users (ch-analytics + pg-main), filter `users.email = "'; DROP TABLE users; --"` | Trino `?` parameterization; no injection |
 | C1421 | Trino cross-DB column name injection | events JOIN users, `columns: ['id"; DROP TABLE users; --']` on users side | `UNKNOWN_COLUMN` error |
 | C1422 | Trino cross-DB aggregation alias injection | events JOIN users, `aggregations: [{ column: 'id', table: 'users', function: 'count', alias: 'x"; DROP TABLE users;--' }]` | rejected or double-quote escaped; no injection |
+| C1428 | Trino `in` filter injection | events JOIN users, filter `users.email in ["x'; DROP TABLE users; --"]` | expanded `IN (?, ?, ...)` — each element individually parameterized; no injection |
+| C1429 | Trino `contains` filter injection | events JOIN users, filter `users.email contains "'; DROP TABLE users; --"` | escapeLike applied, `LIKE ? ESCAPE '\\'` — Trino-specific ESCAPE clause; no injection |
+| C1430 | Trino `levenshteinLte` injection | events JOIN users, filter `users.firstName levenshteinLte { text: "'; DROP TABLE users; --", maxDistance: 5 }` | mapped to `levenshtein_distance()` function; both params via `?`; no injection |
 
 ---
 
@@ -914,7 +929,7 @@ For implementation developers, verify the following groups pass in order:
 17. **SQL Injection** (C1400-C1406) — security
 18. **Edge Cases** (C1700-C1714) — nulls, types, strategies, distinct+count, empty groups
 
-Total: **305 contract tests**
+Total: **313 contract tests**
 
 ---
 
