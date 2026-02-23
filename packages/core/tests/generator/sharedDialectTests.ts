@@ -1239,7 +1239,11 @@ export function describeSharedDialectTests(dialect: SqlDialect, cfg: DialectTest
       })
 
       it('WHERE string column escapes quote chars', () => {
-        const cond: WhereCondition = { column: cfg.injectionWhereStringColumn.sql[0] as string, operator: '>', paramIndex: 0 }
+        const cond: WhereCondition = {
+          column: cfg.injectionWhereStringColumn.sql[0] as string,
+          operator: '>',
+          paramIndex: 0,
+        }
         const result = dialect.generate(base({ where: cond }), [0])
         for (const s of cfg.injectionWhereStringColumn.notSql ?? []) expect(result.sql).not.toContain(s)
       })

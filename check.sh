@@ -6,7 +6,7 @@ pnpm exec biome format --write .
 
 echo ""
 echo "=== Lint ==="
-pnpm exec biome check .
+pnpm exec biome check --error-on-warnings .
 
 echo ""
 echo "=== Typecheck ==="
