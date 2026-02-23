@@ -262,4 +262,26 @@ export const pgConfig: DialectTestConfig = {
     sql: ['("t0"."name" = $1 AND "t0"."age" >= $2 AND "t0"."age" <= $3)'],
     params: ['Alice', 18, 65],
   },
+
+  // ── Injection defense-in-depth ─────────────────────────
+  injectionAggAlias: {
+    sql: ['x"; DROP TABLE t;--'],
+    notSql: ['AS "x"; DROP TABLE'],
+  },
+  injectionOrderByAlias: {
+    sql: ['x"; DROP TABLE t;--'],
+    notSql: ['"x"; DROP TABLE'],
+  },
+  injectionHavingAlias: {
+    sql: ['x"; DROP TABLE t;--'],
+    notSql: ['"x"; DROP TABLE'],
+  },
+  injectionSafeAggFn: {
+    sql: ['COUNT('],
+    notSql: ['sum)', 'DROP TABLE'],
+  },
+  injectionWhereStringColumn: {
+    sql: ['x"; DROP TABLE t;--'],
+    notSql: ['"x"; DROP TABLE'],
+  },
 }

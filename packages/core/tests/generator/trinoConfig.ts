@@ -265,4 +265,26 @@ export const trinoConfig: DialectTestConfig = {
     sql: ['("t0"."name" = ? AND "t0"."age" >= ? AND "t0"."age" <= ?)'],
     params: ['Alice', 18, 65],
   },
+
+  // ── Injection defense-in-depth ─────────────────────────
+  injectionAggAlias: {
+    sql: ['x"; DROP TABLE t;--'],
+    notSql: ['AS "x"; DROP TABLE'],
+  },
+  injectionOrderByAlias: {
+    sql: ['x"; DROP TABLE t;--'],
+    notSql: ['"x"; DROP TABLE'],
+  },
+  injectionHavingAlias: {
+    sql: ['x"; DROP TABLE t;--'],
+    notSql: ['"x"; DROP TABLE'],
+  },
+  injectionSafeAggFn: {
+    sql: ['COUNT('],
+    notSql: ['sum)', 'DROP TABLE'],
+  },
+  injectionWhereStringColumn: {
+    sql: ['x"; DROP TABLE t;--'],
+    notSql: ['"x"; DROP TABLE'],
+  },
 }

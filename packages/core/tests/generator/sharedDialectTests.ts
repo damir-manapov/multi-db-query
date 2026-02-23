@@ -193,6 +193,13 @@ export interface DialectTestConfig extends Record<string, Expect | string> {
   // ── Full query ─────────────────────────────────────────
   fullQuery: Expect
   paramOrder: Expect
+
+  // ── Injection defense-in-depth ─────────────────────────
+  injectionAggAlias: Expect
+  injectionOrderByAlias: Expect
+  injectionHavingAlias: Expect
+  injectionSafeAggFn: Expect
+  injectionWhereStringColumn: Expect
 }
 
 // ── Runner ─────────────────────────────────────────────────────
@@ -1177,6 +1184,61 @@ export function describeSharedDialectTests(dialect: SqlDialect, cfg: DialectTest
           ],
         }
         check(base({ where }), ['Alice', 18, 65], cfg.paramOrder)
+      })
+    })
+
+    // ── Injection defense-in-depth ─────────────────────────
+
+    describe('Injection defense-in-depth', () => {
+      it('aggregation alias escapes quote chars', () => {
+        const parts = base({
+          select: [col('t0', 'status')],
+          from: tbl(`${sub}.orders`, 't0'),
+          groupBy: [col('t0', 'status')],
+          aggregations: [{ fn: 'sum', column: col('t0', 'total'), alias: cfg.injectionAggAlias.sql[0] }],
+        })
+        const result = dialect.generate(parts, [])
+        for (const s of cfg.injectionAggAlias.notSql ?? []) expect(result.sql).not.toContain(s)
+      })
+
+      it('ORDER BY alias escapes quote chars', () => {
+        const parts = base({
+          select: [col('t0', 'status')],
+          from: tbl(`${sub}.orders`, 't0'),
+          groupBy: [col('t0', 'status')],
+          aggregations: [{ fn: 'count', column: '*', alias: 'cnt' }],
+          orderBy: [{ column: cfg.injectionOrderByAlias.sql[0], direction: 'asc' }],
+        })
+        const result = dialect.generate(parts, [])
+        for (const s of cfg.injectionOrderByAlias.notSql ?? []) expect(result.sql).not.toContain(s)
+      })
+
+      it('HAVING alias escapes quote chars', () => {
+        const parts = base({
+          select: [col('t0', 'status')],
+          from: tbl(`${sub}.orders`, 't0'),
+          groupBy: [col('t0', 'status')],
+          aggregations: [{ fn: 'sum', column: col('t0', 'total'), alias: 'total' }],
+          having: { alias: cfg.injectionHavingAlias.sql[0], fromParamIndex: 0, toParamIndex: 1 },
+        })
+        const result = dialect.generate(parts, [100, 1000])
+        for (const s of cfg.injectionHavingAlias.notSql ?? []) expect(result.sql).not.toContain(s)
+      })
+
+      it('safeAggFn rejects malicious function name', () => {
+        const parts = base({
+          select: [col('t0', 'status')],
+          from: tbl(`${sub}.orders`, 't0'),
+          groupBy: [col('t0', 'status')],
+          aggregations: [{ fn: 'sum); DROP TABLE orders;--', column: col('t0', 'total'), alias: 'x' }],
+        })
+        check(parts, [], cfg.injectionSafeAggFn)
+      })
+
+      it('WHERE string column escapes quote chars', () => {
+        const cond: WhereCondition = { column: cfg.injectionWhereStringColumn.sql[0], operator: '>', paramIndex: 0 }
+        const result = dialect.generate(base({ where: cond }), [0])
+        for (const s of cfg.injectionWhereStringColumn.notSql ?? []) expect(result.sql).not.toContain(s)
       })
     })
   })

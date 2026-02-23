@@ -143,7 +143,7 @@ class TrinoGenerator {
 
   // WhereCondition
   private whereCond(c: WhereCondition): string {
-    const col = typeof c.column === 'string' ? `"${c.column}"` : quoteCol(c.column)
+    const col = typeof c.column === 'string' ? `"${escapeIdentDQ(c.column)}"` : quoteCol(c.column)
     const op = c.operator
 
     if (op === 'isNull') return `${col} IS NULL`
@@ -318,7 +318,7 @@ class TrinoGenerator {
   // --- ORDER BY ---
 
   private orderByClause(o: OrderByClause): string {
-    const col = typeof o.column === 'string' ? `"${o.column}"` : quoteCol(o.column)
+    const col = typeof o.column === 'string' ? `"${escapeIdentDQ(o.column)}"` : quoteCol(o.column)
     const dir = o.direction.toLowerCase() === 'desc' ? 'DESC' : 'ASC'
     return `${col} ${dir}`
   }
