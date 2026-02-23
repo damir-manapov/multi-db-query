@@ -10,6 +10,7 @@ import type {
   RoleMeta,
   TableMeta,
 } from '@mkven/multi-db-validation'
+import { ExecutionError, PlannerError } from '@mkven/multi-db-validation'
 import type { EffectiveTableAccess } from '../access/access.js'
 import { resolveTableAccess } from '../access/access.js'
 import type {
@@ -100,7 +101,10 @@ class ResolutionContext {
 
     const table = index.getTable(query.from)
     if (table === undefined) {
-      throw new Error(`Table not found: ${query.from}`)
+      throw new PlannerError('UNREACHABLE_TABLES', query.from, {
+        code: 'UNREACHABLE_TABLES',
+        tables: [query.from],
+      })
     }
     this.fromTable = table
     this.fromAccess = resolveTableAccess(table, context, rolesById)
@@ -135,11 +139,11 @@ class ResolutionContext {
 
     const fromAlias = this.tableAliases.get(this.fromTable.id)
     if (fromAlias === undefined) {
-      throw new Error('From table alias not found')
+      throw new ExecutionError({ code: 'QUERY_FAILED', database: '', dialect: 'postgres', sql: '', params: [], cause: new Error('From table alias not found') })
     }
     const fromRef = this.tableRefs.get(fromAlias)
     if (fromRef === undefined) {
-      throw new Error('From table ref not found')
+      throw new ExecutionError({ code: 'QUERY_FAILED', database: '', dialect: 'postgres', sql: '', params: [], cause: new Error('From table ref not found') })
     }
 
     const parts: SqlParts = {
@@ -184,7 +188,7 @@ class ResolutionContext {
   private getAlias(tableId: string): string {
     const alias = this.tableAliases.get(tableId)
     if (alias === undefined) {
-      throw new Error(`No alias for table: ${tableId}`)
+      throw new ExecutionError({ code: 'QUERY_FAILED', database: '', dialect: 'postgres', sql: '', params: [], cause: new Error(`No alias for table: ${tableId}`) })
     }
     return alias
   }
@@ -194,7 +198,7 @@ class ResolutionContext {
   private resolveColumnRef(apiName: string, tableId: string): ColumnRef {
     const col = this.index.getColumn(tableId, apiName)
     if (col === undefined) {
-      throw new Error(`Column not found: ${apiName} in table ${tableId}`)
+      throw new ExecutionError({ code: 'QUERY_FAILED', database: '', dialect: 'postgres', sql: '', params: [], cause: new Error(`Column not found: ${apiName} in table ${tableId}`) })
     }
     return {
       tableAlias: this.getAlias(tableId),
