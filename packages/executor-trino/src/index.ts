@@ -29,6 +29,11 @@ interface TrinoResponse {
   error?: TrinoResponseError
 }
 
+/**
+ * Inline a parameter value into Trino SQL.
+ * Strings are escaped by doubling single-quotes (Trino's default SQL mode
+ * does not use C-style backslash escapes).
+ */
 function escapeTrinoValue(value: unknown): string {
   if (value === null || value === undefined) return 'NULL'
   if (typeof value === 'number') return String(value)
@@ -72,6 +77,14 @@ export function createTrinoExecutor(config: TrinoExecutorConfig): DbExecutor {
     })
   }
 
+  function throwTrinoError(sql: string, message: string): never {
+    const cause = new Error(message)
+    throw new ExecutionError(
+      { code: 'QUERY_FAILED', database: 'trino', dialect: 'trino', sql, params: [], cause },
+      cause,
+    )
+  }
+
   async function submitAndCollect(sql: string): Promise<Record<string, unknown>[]> {
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -89,19 +102,7 @@ export function createTrinoExecutor(config: TrinoExecutorConfig): DbExecutor {
 
       let body = (await res.json()) as TrinoResponse
 
-      if (body.error !== undefined) {
-        throw new ExecutionError(
-          {
-            code: 'QUERY_FAILED',
-            database: 'trino',
-            dialect: 'trino',
-            sql,
-            params: [],
-            cause: new Error(body.error.message),
-          },
-          new Error(body.error.message),
-        )
-      }
+      if (body.error !== undefined) throwTrinoError(sql, body.error.message)
 
       const columns: string[] = body.columns?.map((c) => c.name) ?? []
       const allRows: Record<string, unknown>[] = []
@@ -116,19 +117,7 @@ export function createTrinoExecutor(config: TrinoExecutorConfig): DbExecutor {
         const nextRes = await fetch(body.nextUri, { signal: controller.signal })
         body = (await nextRes.json()) as TrinoResponse
 
-        if (body.error !== undefined) {
-          throw new ExecutionError(
-            {
-              code: 'QUERY_FAILED',
-              database: 'trino',
-              dialect: 'trino',
-              sql,
-              params: [],
-              cause: new Error(body.error.message),
-            },
-            new Error(body.error.message),
-          )
-        }
+        if (body.error !== undefined) throwTrinoError(sql, body.error.message)
 
         if (body.columns !== undefined && columns.length === 0) {
           for (const col of body.columns) {
