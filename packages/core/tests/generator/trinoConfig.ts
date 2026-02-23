@@ -78,26 +78,40 @@ export const trinoConfig: DialectTestConfig = {
 
   // ── Counted subquery
   countedGte: {
-    sql: ['"t0"."id" IN (SELECT "s0"."user_id" FROM "public"."orders" AS "s0" GROUP BY "s0"."user_id" HAVING COUNT(*) >= ?)'],
+    sql: [
+      '"t0"."id" IN (SELECT "s0"."user_id" FROM "public"."orders" AS "s0" GROUP BY "s0"."user_id" HAVING COUNT(*) >= ?)',
+    ],
     params: [5],
   },
   countedGt: {
-    sql: ['"t0"."id" IN (SELECT "s0"."user_id" FROM "public"."orders" AS "s0" GROUP BY "s0"."user_id" HAVING COUNT(*) > ?)'],
+    sql: [
+      '"t0"."id" IN (SELECT "s0"."user_id" FROM "public"."orders" AS "s0" GROUP BY "s0"."user_id" HAVING COUNT(*) > ?)',
+    ],
     params: [1],
   },
   countedLt: {
-    sql: ['"t0"."id" NOT IN (SELECT "s0"."user_id" FROM "public"."orders" AS "s0" GROUP BY "s0"."user_id" HAVING COUNT(*) >= ?)'],
+    sql: [
+      '"t0"."id" NOT IN (SELECT "s0"."user_id" FROM "public"."orders" AS "s0" GROUP BY "s0"."user_id" HAVING COUNT(*) >= ?)',
+    ],
     params: [2],
   },
   countedLte: {
-    sql: ['"t0"."id" NOT IN (SELECT "s0"."user_id" FROM "public"."orders" AS "s0" GROUP BY "s0"."user_id" HAVING COUNT(*) > ?)'],
+    sql: [
+      '"t0"."id" NOT IN (SELECT "s0"."user_id" FROM "public"."orders" AS "s0" GROUP BY "s0"."user_id" HAVING COUNT(*) > ?)',
+    ],
     params: [1],
   },
 
   // ── GROUP BY + aggregations
   groupByCount: { sql: ['COUNT(*) AS "cnt"', 'GROUP BY "t0"."status"'] },
   sumAgg: { sql: ['SUM("t0"."total") AS "total"'] },
-  avgMinMax: { sql: ['AVG("t0"."total") AS "avg_amount"', 'MIN("t0"."total") AS "min_amount"', 'MAX("t0"."total") AS "max_amount"'] },
+  avgMinMax: {
+    sql: [
+      'AVG("t0"."total") AS "avg_amount"',
+      'MIN("t0"."total") AS "min_amount"',
+      'MAX("t0"."total") AS "max_amount"',
+    ],
+  },
 
   // ── HAVING
   having: { sql: ['HAVING "cnt" > ?'], params: [5] },
@@ -121,6 +135,15 @@ export const trinoConfig: DialectTestConfig = {
   inInt: { sql: ['IN (?, ?)'], params: [1, 2] },
   inDefaultType: { sql: ['IN (?)'], params: ['a'] },
   inSingleElement: { sql: ['"t0"."id" IN (?)'], params: ['only'] },
+
+  // ── Type casts (Trino IN has no type casts)
+  typeCastDecimal: { sql: ['IN (?)'], params: [1.5] },
+  typeCastBoolean: { sql: ['IN (?)'], params: [true] },
+  typeCastDate: { sql: ['IN (?)'], params: ['2024-01-01'] },
+  typeCastTimestamp: { sql: ['IN (?)'], params: ['2024-01-01T00:00:00Z'] },
+
+  // ── Float param (Trino uses positional ?)
+  floatParam: { sql: ['"t0"."score" > ?'], params: [3.14] },
 
   // ── Catalog-qualified
   catalogTable: { sql: ['FROM "pg_main"."public"."users" AS "t0"'] },

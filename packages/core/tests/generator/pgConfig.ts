@@ -6,7 +6,10 @@ export const pgConfig: DialectTestConfig = {
   subSchema: 'public',
 
   // ── SELECT
-  simpleSelect: { sql: ['SELECT "t0"."id" AS "t0__id", "t0"."name" AS "t0__name" FROM "public"."users" AS "t0"'], params: [] },
+  simpleSelect: {
+    sql: ['SELECT "t0"."id" AS "t0__id", "t0"."name" AS "t0__name" FROM "public"."users" AS "t0"'],
+    params: [],
+  },
   distinct: { sql: ['SELECT DISTINCT "t0"."id"'] },
   countMode: { sql: ['SELECT COUNT(*) FROM "public"."users" AS "t0"'] },
   emptySelect: { sql: ['SELECT * FROM "public"."users" AS "t0"'] },
@@ -78,11 +81,15 @@ export const pgConfig: DialectTestConfig = {
 
   // ── Counted subquery
   countedGte: {
-    sql: ['(SELECT COUNT(*) FROM (SELECT 1 FROM "public"."orders" AS "s0" WHERE "t0"."id" = "s0"."user_id" LIMIT 5) AS "_c") >= $1'],
+    sql: [
+      '(SELECT COUNT(*) FROM (SELECT 1 FROM "public"."orders" AS "s0" WHERE "t0"."id" = "s0"."user_id" LIMIT 5) AS "_c") >= $1',
+    ],
     params: [5],
   },
   countedGt: {
-    sql: ['(SELECT COUNT(*) FROM (SELECT 1 FROM "public"."orders" AS "s0" WHERE "t0"."id" = "s0"."user_id" LIMIT 2) AS "_c") > $1'],
+    sql: [
+      '(SELECT COUNT(*) FROM (SELECT 1 FROM "public"."orders" AS "s0" WHERE "t0"."id" = "s0"."user_id" LIMIT 2) AS "_c") > $1',
+    ],
   },
   countedLt: {
     sql: ['(SELECT COUNT(*) FROM "public"."orders" AS "s0" WHERE "t0"."id" = "s0"."user_id") < $1'],
@@ -95,7 +102,13 @@ export const pgConfig: DialectTestConfig = {
   // ── GROUP BY + aggregations
   groupByCount: { sql: ['COUNT(*) AS "cnt"', 'GROUP BY "t0"."status"'] },
   sumAgg: { sql: ['SUM("t0"."total") AS "total"'] },
-  avgMinMax: { sql: ['AVG("t0"."total") AS "avg_amount"', 'MIN("t0"."total") AS "min_amount"', 'MAX("t0"."total") AS "max_amount"'] },
+  avgMinMax: {
+    sql: [
+      'AVG("t0"."total") AS "avg_amount"',
+      'MIN("t0"."total") AS "min_amount"',
+      'MAX("t0"."total") AS "max_amount"',
+    ],
+  },
 
   // ── HAVING
   having: { sql: ['HAVING COUNT(*) > $1'], params: [5] },
@@ -118,12 +131,20 @@ export const pgConfig: DialectTestConfig = {
   notInString: { sql: ['"t0"."name" <> ALL($1::text[])'], params: [['a', 'b']] },
   inInt: { sql: ['"t0"."age" = ANY($1::integer[])'], params: [[1, 2]] },
   inDefaultType: { sql: ['= ANY($1::text[])'], params: [['a']] },
+  inSingleElement: { sql: ['= ANY($1::uuid[])'], params: [['only']] },
 
   // ── Type casts
   typeCastDecimal: { sql: ['$1::numeric[]'], params: [[1.5]] },
   typeCastBoolean: { sql: ['$1::bool[]'], params: [[true]] },
   typeCastDate: { sql: ['$1::date[]'], params: [['2024-01-01']] },
   typeCastTimestamp: { sql: ['$1::timestamp[]'], params: [['2024-01-01T00:00:00Z']] },
+
+  // ── Float param
+  floatParam: { sql: ['"t0"."score" > $1'], params: [3.14] },
+
+  // ── Catalog-qualified (PG ignores catalog)
+  catalogTable: { sql: ['FROM "public"."users" AS "t0"'] },
+  catalogJoin: { sql: ['INNER JOIN "public"."orders" AS "t1" ON "t0"."id" = "t1"."user_id"'] },
 
   // ── Full query
   fullQuery: {

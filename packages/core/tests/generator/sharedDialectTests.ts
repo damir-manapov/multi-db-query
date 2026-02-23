@@ -143,20 +143,20 @@ export interface DialectTestConfig {
   notInString: Expect
   inInt: Expect
   inDefaultType: Expect
-  inSingleElement?: Expect
+  inSingleElement: Expect
 
   // ── Type casts (via IN) ────────────────────────────────
-  typeCastDecimal?: Expect
-  typeCastBoolean?: Expect
-  typeCastDate?: Expect
-  typeCastTimestamp?: Expect
+  typeCastDecimal: Expect
+  typeCastBoolean: Expect
+  typeCastDate: Expect
+  typeCastTimestamp: Expect
 
   // ── Float param ────────────────────────────────────────
-  floatParam?: Expect
+  floatParam: Expect
 
   // ── Catalog-qualified ──────────────────────────────────
-  catalogTable?: Expect
-  catalogJoin?: Expect
+  catalogTable: Expect
+  catalogJoin: Expect
 
   // ── Full query ─────────────────────────────────────────
   fullQuery: Expect
@@ -192,7 +192,12 @@ export function describeSharedDialectTests(dialect: SqlDialect, cfg: DialectTest
       it('inner join', () => {
         const parts = base({
           joins: [
-            { type: 'inner', table: tbl(`${sub}.orders`, 't1'), leftColumn: col('t0', 'id'), rightColumn: col('t1', 'user_id') },
+            {
+              type: 'inner',
+              table: tbl(`${sub}.orders`, 't1'),
+              leftColumn: col('t0', 'id'),
+              rightColumn: col('t1', 'user_id'),
+            },
           ],
         })
         check(parts, [], cfg.innerJoin)
@@ -201,7 +206,12 @@ export function describeSharedDialectTests(dialect: SqlDialect, cfg: DialectTest
       it('left join', () => {
         const parts = base({
           joins: [
-            { type: 'left', table: tbl(`${sub}.orders`, 't1'), leftColumn: col('t0', 'id'), rightColumn: col('t1', 'user_id') },
+            {
+              type: 'left',
+              table: tbl(`${sub}.orders`, 't1'),
+              leftColumn: col('t0', 'id'),
+              rightColumn: col('t1', 'user_id'),
+            },
           ],
         })
         check(parts, [], cfg.leftJoin)
@@ -370,17 +380,32 @@ export function describeSharedDialectTests(dialect: SqlDialect, cfg: DialectTest
 
     describe('array operators', () => {
       it('arrayContains', () => {
-        const cond: WhereArrayCondition = { column: col('t0', 'tags'), operator: 'contains', paramIndexes: [0], elementType: 'string' }
+        const cond: WhereArrayCondition = {
+          column: col('t0', 'tags'),
+          operator: 'contains',
+          paramIndexes: [0],
+          elementType: 'string',
+        }
         check(base({ where: cond }), ['urgent'], cfg.arrayContains)
       })
 
       it('arrayContainsAll', () => {
-        const cond: WhereArrayCondition = { column: col('t0', 'tags'), operator: 'containsAll', paramIndexes: [0], elementType: 'string' }
+        const cond: WhereArrayCondition = {
+          column: col('t0', 'tags'),
+          operator: 'containsAll',
+          paramIndexes: [0],
+          elementType: 'string',
+        }
         check(base({ where: cond }), [['a', 'b']], cfg.arrayContainsAll)
       })
 
       it('arrayContainsAny', () => {
-        const cond: WhereArrayCondition = { column: col('t0', 'tags'), operator: 'containsAny', paramIndexes: [0], elementType: 'string' }
+        const cond: WhereArrayCondition = {
+          column: col('t0', 'tags'),
+          operator: 'containsAny',
+          paramIndexes: [0],
+          elementType: 'string',
+        }
         check(base({ where: cond }), [['x', 'y']], cfg.arrayContainsAny)
       })
 
@@ -644,7 +669,12 @@ export function describeSharedDialectTests(dialect: SqlDialect, cfg: DialectTest
       })
 
       it('notIn with string type', () => {
-        const cond: WhereCondition = { column: col('t0', 'name'), operator: 'notIn', paramIndex: 0, columnType: 'string' }
+        const cond: WhereCondition = {
+          column: col('t0', 'name'),
+          operator: 'notIn',
+          paramIndex: 0,
+          columnType: 'string',
+        }
         check(base({ where: cond }), [['a', 'b']], cfg.notInString)
       })
 
@@ -658,69 +688,76 @@ export function describeSharedDialectTests(dialect: SqlDialect, cfg: DialectTest
         check(base({ where: cond }), [['a']], cfg.inDefaultType)
       })
 
-      if (cfg.inSingleElement) {
-        it('in single element', () => {
-          const cond: WhereCondition = { column: col('t0', 'id'), operator: 'in', paramIndex: 0, columnType: 'uuid' }
-          check(base({ where: cond }), [['only']], cfg.inSingleElement!)
-        })
-      }
+      it('in single element', () => {
+        const cond: WhereCondition = { column: col('t0', 'id'), operator: 'in', paramIndex: 0, columnType: 'uuid' }
+        check(base({ where: cond }), [['only']], cfg.inSingleElement)
+      })
     })
 
     // ── Type casts (via IN) ───────────────────────────────
 
-    if (cfg.typeCastDecimal) {
-      describe('type casts', () => {
-        it('decimal', () => {
-          const cond: WhereCondition = { column: col('t0', 'price'), operator: 'in', paramIndex: 0, columnType: 'decimal' }
-          check(base({ where: cond }), [[1.5]], cfg.typeCastDecimal!)
-        })
-
-        it('boolean', () => {
-          const cond: WhereCondition = { column: col('t0', 'active'), operator: 'in', paramIndex: 0, columnType: 'boolean' }
-          check(base({ where: cond }), [[true]], cfg.typeCastBoolean!)
-        })
-
-        it('date', () => {
-          const cond: WhereCondition = { column: col('t0', 'created'), operator: 'in', paramIndex: 0, columnType: 'date' }
-          check(base({ where: cond }), [['2024-01-01']], cfg.typeCastDate!)
-        })
-
-        it('timestamp', () => {
-          const cond: WhereCondition = { column: col('t0', 'ts'), operator: 'in', paramIndex: 0, columnType: 'timestamp' }
-          check(base({ where: cond }), [['2024-01-01T00:00:00Z']], cfg.typeCastTimestamp!)
-        })
+    describe('type casts', () => {
+      it('decimal', () => {
+        const cond: WhereCondition = {
+          column: col('t0', 'price'),
+          operator: 'in',
+          paramIndex: 0,
+          columnType: 'decimal',
+        }
+        check(base({ where: cond }), [[1.5]], cfg.typeCastDecimal)
       })
-    }
+
+      it('boolean', () => {
+        const cond: WhereCondition = {
+          column: col('t0', 'active'),
+          operator: 'in',
+          paramIndex: 0,
+          columnType: 'boolean',
+        }
+        check(base({ where: cond }), [[true]], cfg.typeCastBoolean)
+      })
+
+      it('date', () => {
+        const cond: WhereCondition = { column: col('t0', 'created'), operator: 'in', paramIndex: 0, columnType: 'date' }
+        check(base({ where: cond }), [['2024-01-01']], cfg.typeCastDate)
+      })
+
+      it('timestamp', () => {
+        const cond: WhereCondition = { column: col('t0', 'ts'), operator: 'in', paramIndex: 0, columnType: 'timestamp' }
+        check(base({ where: cond }), [['2024-01-01T00:00:00Z']], cfg.typeCastTimestamp)
+      })
+    })
 
     // ── Float param ───────────────────────────────────────
 
-    if (cfg.floatParam) {
-      describe('float param', () => {
-        it('float → dialect-specific type', () => {
-          const cond: WhereCondition = { column: col('t0', 'score'), operator: '>', paramIndex: 0 }
-          check(base({ where: cond }), [3.14], cfg.floatParam!)
-        })
+    describe('float param', () => {
+      it('float → dialect-specific type', () => {
+        const cond: WhereCondition = { column: col('t0', 'score'), operator: '>', paramIndex: 0 }
+        check(base({ where: cond }), [3.14], cfg.floatParam)
       })
-    }
+    })
 
     // ── Catalog-qualified ─────────────────────────────────
 
-    if (cfg.catalogTable) {
-      describe('catalog-qualified', () => {
-        it('catalog-qualified table', () => {
-          check(base({ from: tbl(`${cfg.schema}.users`, 't0', 'pg_main') }), [], cfg.catalogTable!)
-        })
-
-        it('catalog-qualified join', () => {
-          const parts = base({
-            joins: [
-              { type: 'inner', table: tbl(`${sub}.orders`, 't1', 'pg_main'), leftColumn: col('t0', 'id'), rightColumn: col('t1', 'user_id') },
-            ],
-          })
-          check(parts, [], cfg.catalogJoin!)
-        })
+    describe('catalog-qualified', () => {
+      it('catalog-qualified table', () => {
+        check(base({ from: tbl(`${cfg.schema}.users`, 't0', 'pg_main') }), [], cfg.catalogTable)
       })
-    }
+
+      it('catalog-qualified join', () => {
+        const parts = base({
+          joins: [
+            {
+              type: 'inner',
+              table: tbl(`${sub}.orders`, 't1', 'pg_main'),
+              leftColumn: col('t0', 'id'),
+              rightColumn: col('t1', 'user_id'),
+            },
+          ],
+        })
+        check(parts, [], cfg.catalogJoin)
+      })
+    })
 
     // ── Full query ────────────────────────────────────────
 
@@ -731,7 +768,12 @@ export function describeSharedDialectTests(dialect: SqlDialect, cfg: DialectTest
           distinct: true,
           from: tbl(`${sub}.orders`, 't0'),
           joins: [
-            { type: 'inner', table: tbl(`${sub}.users`, 't1'), leftColumn: col('t0', 'user_id'), rightColumn: col('t1', 'id') },
+            {
+              type: 'inner',
+              table: tbl(`${sub}.users`, 't1'),
+              leftColumn: col('t0', 'user_id'),
+              rightColumn: col('t1', 'id'),
+            },
           ],
           where: { column: col('t1', 'age'), operator: '>=', paramIndex: 0 },
           groupBy: [col('t0', 'status')],

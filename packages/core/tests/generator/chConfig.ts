@@ -78,22 +78,36 @@ export const chConfig: DialectTestConfig = {
 
   // ── Counted subquery
   countedGte: {
-    sql: ['`t0`.`id` IN (SELECT `s0`.`user_id` FROM `default`.`orders` AS `s0` GROUP BY `s0`.`user_id` HAVING COUNT(*) >= {p1:UInt64})'],
+    sql: [
+      '`t0`.`id` IN (SELECT `s0`.`user_id` FROM `default`.`orders` AS `s0` GROUP BY `s0`.`user_id` HAVING COUNT(*) >= {p1:UInt64})',
+    ],
   },
   countedGt: {
-    sql: ['`t0`.`id` IN (SELECT `s0`.`user_id` FROM `default`.`orders` AS `s0` GROUP BY `s0`.`user_id` HAVING COUNT(*) > {p1:UInt64})'],
+    sql: [
+      '`t0`.`id` IN (SELECT `s0`.`user_id` FROM `default`.`orders` AS `s0` GROUP BY `s0`.`user_id` HAVING COUNT(*) > {p1:UInt64})',
+    ],
   },
   countedLt: {
-    sql: ['`t0`.`id` NOT IN (SELECT `s0`.`user_id` FROM `default`.`orders` AS `s0` GROUP BY `s0`.`user_id` HAVING COUNT(*) >= {p1:UInt64})'],
+    sql: [
+      '`t0`.`id` NOT IN (SELECT `s0`.`user_id` FROM `default`.`orders` AS `s0` GROUP BY `s0`.`user_id` HAVING COUNT(*) >= {p1:UInt64})',
+    ],
   },
   countedLte: {
-    sql: ['`t0`.`id` NOT IN (SELECT `s0`.`user_id` FROM `default`.`orders` AS `s0` GROUP BY `s0`.`user_id` HAVING COUNT(*) > {p1:UInt64})'],
+    sql: [
+      '`t0`.`id` NOT IN (SELECT `s0`.`user_id` FROM `default`.`orders` AS `s0` GROUP BY `s0`.`user_id` HAVING COUNT(*) > {p1:UInt64})',
+    ],
   },
 
   // ── GROUP BY + aggregations
   groupByCount: { sql: ['COUNT(*) AS `cnt`', 'GROUP BY `t0`.`status`'] },
   sumAgg: { sql: ['SUM(`t0`.`total`) AS `total`'] },
-  avgMinMax: { sql: ['AVG(`t0`.`total`) AS `avg_amount`', 'MIN(`t0`.`total`) AS `min_amount`', 'MAX(`t0`.`total`) AS `max_amount`'] },
+  avgMinMax: {
+    sql: [
+      'AVG(`t0`.`total`) AS `avg_amount`',
+      'MIN(`t0`.`total`) AS `min_amount`',
+      'MAX(`t0`.`total`) AS `max_amount`',
+    ],
+  },
 
   // ── HAVING
   having: { sql: ['HAVING `cnt` > {p1:Int32}'], params: [5] },
@@ -116,6 +130,7 @@ export const chConfig: DialectTestConfig = {
   notInString: { sql: ['`t0`.`name` NOT IN tuple({p1:String}, {p2:String})'], params: ['a', 'b'] },
   inInt: { sql: ['IN tuple({p1:Int32}, {p2:Int32})'], params: [1, 2] },
   inDefaultType: { sql: ['IN tuple({p1:String})'], params: ['a'] },
+  inSingleElement: { sql: ['IN tuple({p1:UUID})'], params: ['only'] },
 
   // ── Type casts
   typeCastDecimal: { sql: ['IN tuple({p1:Decimal})'], params: [1.5] },
@@ -125,6 +140,10 @@ export const chConfig: DialectTestConfig = {
 
   // ── Float param
   floatParam: { sql: ['{p1:Float64}'] },
+
+  // ── Catalog-qualified (CH ignores catalog)
+  catalogTable: { sql: ['FROM `default`.`users` AS `t0`'] },
+  catalogJoin: { sql: ['INNER JOIN `default`.`orders` AS `t1` ON `t0`.`id` = `t1`.`user_id`'] },
 
   // ── Full query
   fullQuery: {
