@@ -32,7 +32,7 @@ export interface Expect {
   params?: unknown[]
 }
 
-export interface DialectTestConfig {
+export interface DialectTestConfig extends Record<string, Expect | string> {
   /** Display name, e.g. 'PostgresDialect' */
   name: string
   /** Default schema for base(), e.g. 'public' or 'default' */
