@@ -18,6 +18,10 @@ export type {
   ValidateResult,
 } from './client.js'
 export { createMultiDbClient } from './client.js'
+export { describeEdgeCaseContract } from './contract/edgeCaseContract.js'
+export { describeErrorContract } from './contract/errorContract.js'
+export { describeHealthLifecycleContract } from './contract/healthLifecycleContract.js'
+export { describeInjectionContract } from './contract/injectionContract.js'
 // Contract testing
 export type { QueryContract } from './contract/queryContract.js'
 export { describeQueryContract } from './contract/queryContract.js'

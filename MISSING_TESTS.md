@@ -6,6 +6,37 @@ Current test executions: **632** (includes injection sql-only unit tests).
 
 ---
 
+## Skipped Tests — 10
+
+These tests are implemented but skipped (`it.skip`) due to engine bugs, missing features, or infrastructure requirements.
+
+### Engine Bugs (2)
+
+| ID | File | Description |
+|----|------|-------------|
+| C602 | queryContract.ts | EXISTS with subquery filter — "No alias for table" when EXISTS has nested filters |
+| C604 | queryContract.ts | Nested EXISTS — "No alias for table" when EXISTS has nested filters |
+
+### Feature Gaps (5)
+
+| ID | File | Description |
+|----|------|-------------|
+| C202 | queryContract.ts | Multi-table join (3 tables) — transitive join resolution not supported |
+| C723 | queryContract.ts | One scope with zero roles — multi-scope role context not supported |
+| C950 | queryContract.ts | Column filter type mismatch — refColumn type validation not implemented |
+| C977 | queryContract.ts | QueryColumnFilter in HAVING — refColumn in HAVING validation not implemented |
+| C1711 | edgeCaseContract.ts | Materialized replica query — planner doesn't route to replica |
+| C1716 | edgeCaseContract.ts | Freshness hours allows stale replica — planner doesn't route to replica |
+
+### Infrastructure (2)
+
+| ID | File | Description |
+|----|------|-------------|
+| C1110 | queryContract.ts | meta.targetDatabase for cross-DB query — requires Trino in Docker Compose |
+| C1712 | edgeCaseContract.ts | Cross-DB Trino join — requires Trino in Docker Compose |
+
+---
+
 ## Outstanding Gaps
 
 ### 1. Integration Tests Require Infrastructure
