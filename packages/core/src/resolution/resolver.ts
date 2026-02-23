@@ -375,6 +375,54 @@ class ResolutionContext {
       }
     }
 
+    // Transitive: find relation through an already-joined table
+    const transitive = this.findTransitiveRelation(joinTable)
+    if (transitive !== undefined) {
+      return {
+        type: join.type ?? 'left',
+        table: { physicalName: joinTable.physicalName, alias: joinAlias },
+        leftColumn: transitive.leftColumn,
+        rightColumn: { tableAlias: joinAlias, columnName: transitive.rightPhysical },
+      }
+    }
+
+    return undefined
+  }
+
+  private findTransitiveRelation(
+    joinTable: TableMeta,
+  ): { leftColumn: ColumnRef; rightPhysical: string } | undefined {
+    for (const [tableId, alias] of this.tableAliases) {
+      if (tableId === joinTable.id) continue
+      const intermediary = this.index.getTable(tableId)
+      if (intermediary === undefined) continue
+
+      // intermediary → joinTable
+      const intRel = intermediary.relations.find((r) => r.references.table === joinTable.id)
+      if (intRel !== undefined) {
+        const leftCol = intermediary.columns.find((c) => c.apiName === intRel.column)
+        const rightCol = joinTable.columns.find((c) => c.apiName === intRel.references.column)
+        if (leftCol !== undefined && rightCol !== undefined) {
+          return {
+            leftColumn: { tableAlias: alias, columnName: leftCol.physicalName },
+            rightPhysical: rightCol.physicalName,
+          }
+        }
+      }
+
+      // joinTable → intermediary
+      const joinRel = joinTable.relations.find((r) => r.references.table === intermediary.id)
+      if (joinRel !== undefined) {
+        const rightCol = joinTable.columns.find((c) => c.apiName === joinRel.column)
+        const leftCol = intermediary.columns.find((c) => c.apiName === joinRel.references.column)
+        if (leftCol !== undefined && rightCol !== undefined) {
+          return {
+            leftColumn: { tableAlias: alias, columnName: leftCol.physicalName },
+            rightPhysical: rightCol.physicalName,
+          }
+        }
+      }
+    }
     return undefined
   }
 

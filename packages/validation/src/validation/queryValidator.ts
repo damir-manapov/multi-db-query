@@ -98,9 +98,11 @@ export function validateQuery(
         continue
       }
 
+      // Check relation: from→join, join→from, or join↔any already-joined table
       const hasRelation =
         fromTable.relations.some((r) => r.references.table === joinTable.id || r.references.table === join.table) ||
-        joinTable.relations.some((r) => r.references.table === fromTable.id || r.references.table === definition.from)
+        joinTable.relations.some((r) => r.references.table === fromTable.id || r.references.table === definition.from) ||
+        hasTransitiveRelation(joinTable, join.table, joinedTables)
 
       if (!hasRelation) {
         errors.push({
@@ -1031,4 +1033,22 @@ function validateHavingFilter(
       details: { operator: f.operator, filterIndex },
     })
   }
+}
+
+// --- Transitive Join Helper ---
+
+function hasTransitiveRelation(
+  joinTable: TableMeta,
+  joinApiName: string,
+  alreadyJoined: ReadonlyMap<string, TableMeta>,
+): boolean {
+  for (const [, joined] of alreadyJoined) {
+    if (
+      joined.relations.some((r) => r.references.table === joinTable.id || r.references.table === joinApiName) ||
+      joinTable.relations.some((r) => r.references.table === joined.id || r.references.table === joined.apiName)
+    ) {
+      return true
+    }
+  }
+  return false
 }

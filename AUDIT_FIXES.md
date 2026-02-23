@@ -85,7 +85,7 @@ These required CONTRACT_TESTS.md fixes before implementation — **all resolved*
 
 ---
 
-## 4. Skipped Tests — 5 remain
+## 4. Skipped Tests — 4 remain
 
 8 tests were unskipped in the original audit. Subsequently 5 more were unskipped by fixing engine bugs and adding validation:
 - **C602, C604** — EXISTS alias bug fixed in resolver (subquery alias now registered before resolving nested filters)
@@ -95,7 +95,6 @@ These required CONTRACT_TESTS.md fixes before implementation — **all resolved*
 
 | ID | File | Reason | Category |
 |----|------|--------|----------|
-| C202 | queryContract.ts | Engine does not support transitive join resolution (3 tables) | Feature gap |
 | C1110 | queryContract.ts | Trino catalog not available in Docker Compose test setup | Infra |
 | C1711 | edgeCaseContract.ts | Planner doesn't route to replica when primary executor is available | Feature gap |
 | C1712 | edgeCaseContract.ts | Trino catalog not available in Docker Compose test setup | Infra |

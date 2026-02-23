@@ -6,15 +6,14 @@ Current test executions: **661** (includes masking, logger, and injection sql-on
 
 ---
 
-## Skipped Tests — 5
+## Skipped Tests — 4
 
 These tests are implemented but skipped (`it.skip`) due to missing features or infrastructure requirements.
 
-### Feature Gaps (3)
+### Feature Gaps (2)
 
 | ID | File | Description |
 |----|------|-------------|
-| C202 | queryContract.ts | Multi-table join (3 tables) — transitive join resolution not supported |
 | C1711 | edgeCaseContract.ts | Materialized replica query — planner doesn't route to replica |
 | C1716 | edgeCaseContract.ts | Freshness hours allows stale replica — planner doesn't route to replica |
 

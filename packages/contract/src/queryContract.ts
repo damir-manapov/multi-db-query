@@ -2294,8 +2294,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           }
         })
 
-        it.skip('C202: multi-table join (3 tables)', async () => {
-          // TODO: engine does not support transitive join resolution (samples → sampleItems → sampleDetails)
+        it('C202: multi-table join (3 tables)', async () => {
           const r = await engine.query({
             definition: { from: samples, joins: [{ table: sampleItems }, { table: sampleDetails }] },
             context: admin,

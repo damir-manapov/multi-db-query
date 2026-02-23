@@ -40,7 +40,7 @@
 
 **Status:** Trino already in `compose/docker-compose.yml` with catalog configs. Just need to un-skip and run `pnpm test:integration`.
 
-## Phase 6 — C202: 3-table join (feature, ~35 lines)
+## Phase 6 — C202: 3-table join (feature, ~35 lines) ✅
 
 **Files:** `packages/validation/src/validation/queryValidator.ts`, `packages/core/src/resolution/resolver.ts`
 
