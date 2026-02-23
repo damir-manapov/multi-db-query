@@ -2,7 +2,7 @@
 
 44 test IDs from [CONTRACT_TESTS.md](https://github.com/making-ventures/concept-multi-db-query-engine/blob/main/CONTRACT_TESTS.md) are not yet implemented.
 
-Currently implemented: **356 / 400** test IDs (609 test executions including injection sql-only tests).
+Currently implemented: **364 / 408** test IDs (632 test executions including injection sql-only tests).
 
 Additionally, sections 3–9 run only **2 dialect variants** (pg, ch) instead of the 3 required by the spec (pg, ch, **trino**). This means **113 parameterized test IDs** are missing their Trino variant.
 

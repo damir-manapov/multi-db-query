@@ -175,6 +175,103 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
           'INVALID_HAVING',
         )
       })
+
+      it('C1466: JOIN table name injection', async () => {
+        await expectValidationError(
+          engine,
+          {
+            from: 'orders',
+            joins: [{ table: 'users; DROP TABLE users' }],
+          },
+          'UNKNOWN_TABLE',
+        )
+      })
+
+      it('C1467: ORDER BY column injection', async () => {
+        await expectValidationError(
+          engine,
+          {
+            from: 'orders',
+            orderBy: [{ column: 'id"; DROP TABLE orders;--', direction: 'asc' }],
+          },
+          'INVALID_ORDER_BY',
+        )
+      })
+
+      it('C1468: GROUP BY column injection', async () => {
+        await expectValidationError(
+          engine,
+          {
+            from: 'orders',
+            columns: [],
+            aggregations: [{ column: 'total', fn: 'sum', alias: 'x' }],
+            groupBy: [{ column: 'status"; DROP TABLE orders;--' }],
+          },
+          'UNKNOWN_COLUMN',
+        )
+      })
+
+      it('C1469: aggregation column injection', async () => {
+        await expectValidationError(
+          engine,
+          {
+            from: 'orders',
+            columns: [],
+            aggregations: [{ column: 'total"; DROP TABLE orders;--', fn: 'sum', alias: 'x' }],
+          },
+          'UNKNOWN_COLUMN',
+        )
+      })
+
+      it('C1470: HAVING column (non-alias) injection', async () => {
+        await expectValidationError(
+          engine,
+          {
+            from: 'orders',
+            columns: [],
+            aggregations: [{ column: 'total', fn: 'sum', alias: 'x' }],
+            groupBy: [{ column: 'status' }],
+            having: [{ column: 'x"; DROP TABLE orders;--', operator: '>', value: 0 }],
+          },
+          'INVALID_HAVING',
+        )
+      })
+
+      it('C1471: HAVING operator injection', async () => {
+        await expectValidationError(
+          engine,
+          {
+            from: 'orders',
+            columns: [],
+            aggregations: [{ column: 'total', fn: 'sum', alias: 'x' }],
+            groupBy: [{ column: 'status' }],
+            having: [{ column: 'x', operator: '> 0); DROP TABLE orders;--' as '>', value: 0 }],
+          },
+          'INVALID_HAVING',
+        )
+      })
+
+      it('C1472: filter value operator injection', async () => {
+        await expectValidationError(
+          engine,
+          {
+            from: 'orders',
+            filters: [{ column: 'status', operator: '= 1); DROP TABLE orders;--' as '=', value: 'active' }],
+          },
+          'INVALID_FILTER',
+        )
+      })
+
+      it('C1473: filter column name injection', async () => {
+        await expectValidationError(
+          engine,
+          {
+            from: 'orders',
+            filters: [{ column: 'status"; DROP TABLE orders;--', operator: '=', value: 'active' }],
+          },
+          'UNKNOWN_COLUMN',
+        )
+      })
     })
 
     // ── 16.2 Aggregation Alias Injection ────────────────────
