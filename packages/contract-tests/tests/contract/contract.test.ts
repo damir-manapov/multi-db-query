@@ -1,4 +1,6 @@
 import { createRedisCache } from '@mkven/multi-db-cache-redis'
+import type { ValidateResult } from '@mkven/multi-db-client'
+import { createMultiDbClient } from '@mkven/multi-db-client'
 import {
   describeEdgeCaseContract,
   describeErrorContract,
@@ -21,8 +23,6 @@ import {
 } from '@mkven/multi-db-query'
 import { afterAll, beforeAll } from 'vitest'
 import { createServer } from '../../../../compose/server/index.js'
-import type { ValidateResult } from '../../src/client.js'
-import { createMultiDbClient } from '../../src/client.js'
 import { metadata, roles } from './fixture.js'
 
 const PG_URL = process.env.PG_URL ?? 'postgresql://postgres:postgres@localhost:5432/multidb'

@@ -18,14 +18,6 @@
   "dependencies": {
     "@mkven/multi-db-validation": "workspace:*"
   },
-  "devDependencies": {
-    "@mkven/multi-db-cache-redis": "workspace:*",
-    "@mkven/multi-db-contract": "workspace:*",
-    "@mkven/multi-db-executor-clickhouse": "workspace:*",
-    "@mkven/multi-db-executor-postgres": "workspace:*",
-    "@mkven/multi-db-executor-trino": "workspace:*",
-    "@mkven/multi-db-query": "workspace:*"
-  },
   "scripts": {
     "build": "tsc -b"
   }

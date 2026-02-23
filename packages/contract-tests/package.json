@@ -1,0 +1,18 @@
+{
+  "name": "@mkven/multi-db-contract-tests",
+  "version": "0.0.0",
+  "private": true,
+  "author": "Damir Manapov",
+  "license": "MIT",
+  "type": "module",
+  "devDependencies": {
+    "@mkven/multi-db-cache-redis": "workspace:*",
+    "@mkven/multi-db-client": "workspace:*",
+    "@mkven/multi-db-contract": "workspace:*",
+    "@mkven/multi-db-executor-clickhouse": "workspace:*",
+    "@mkven/multi-db-executor-postgres": "workspace:*",
+    "@mkven/multi-db-executor-trino": "workspace:*",
+    "@mkven/multi-db-query": "workspace:*",
+    "@mkven/multi-db-validation": "workspace:*"
+  }
+}
