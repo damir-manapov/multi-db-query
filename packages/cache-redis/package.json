@@ -1,5 +1,6 @@
 {
   "name": "@mkven/multi-db-cache-redis",
+  "description": "Redis cache provider for @mkven/multi-db-query",
   "version": "0.0.0",
   "author": "Damir Manapov",
   "license": "MIT",

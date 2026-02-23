@@ -12,7 +12,9 @@ Metadata-driven, multi-database query engine for Postgres, ClickHouse, Iceberg (
 | `@mkven/multi-db-executor-clickhouse` | ClickHouse executor |
 | `@mkven/multi-db-executor-trino` | Trino executor |
 | `@mkven/multi-db-cache-redis` | Redis cache provider |
-| `@mkven/multi-db-client` | HTTP client + contract tests |
+| `@mkven/multi-db-client` | Typed HTTP client |
+| `@mkven/multi-db-contract` | Contract test suites (6 `describe*Contract` functions) |
+| `@mkven/multi-db-contract-tests` | Wires contract suites to real executors (private) |
 
 ## Development
 

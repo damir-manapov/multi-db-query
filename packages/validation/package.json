@@ -1,5 +1,6 @@
 {
   "name": "@mkven/multi-db-validation",
+  "description": "Types, error classes, config & query validation (zero I/O deps)",
   "version": "0.0.0",
   "author": "Damir Manapov",
   "license": "MIT",

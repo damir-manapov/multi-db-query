@@ -1,11 +1,13 @@
 {
   "name": "@mkven/multi-db-contract-tests",
+  "description": "Wires contract test suites to real executors",
   "version": "0.0.0",
   "private": true,
   "author": "Damir Manapov",
   "license": "MIT",
   "type": "module",
   "devDependencies": {
+    "@types/node": "^24.0.0",
     "@mkven/multi-db-cache-redis": "workspace:*",
     "@mkven/multi-db-client": "workspace:*",
     "@mkven/multi-db-contract": "workspace:*",

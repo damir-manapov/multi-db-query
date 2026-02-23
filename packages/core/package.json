@@ -1,5 +1,6 @@
 {
   "name": "@mkven/multi-db-query",
+  "description": "Metadata-driven multi-database query engine: registry, planner, SQL generators, masking",
   "version": "0.0.0",
   "author": "Damir Manapov",
   "license": "MIT",

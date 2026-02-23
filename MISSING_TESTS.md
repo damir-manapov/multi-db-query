@@ -32,8 +32,10 @@ These tests are implemented but skipped (`it.skip`) due to engine bugs, missing 
 
 | ID | File | Description |
 |----|------|-------------|
-| C1110 | queryContract.ts | meta.targetDatabase for cross-DB query — requires Trino in Docker Compose |
-| C1712 | edgeCaseContract.ts | Cross-DB Trino join — requires Trino in Docker Compose |
+| C1110 | queryContract.ts | meta.targetDatabase for cross-DB query — requires running integration tests |
+| C1712 | edgeCaseContract.ts | Cross-DB Trino join — requires running integration tests |
+
+> Trino and Redis are available in `compose/docker-compose.yml`. These tests can run via `pnpm test:integration`.
 
 ---
 
@@ -60,8 +62,7 @@ Sections 3–9 run each test ID × 2 variants (pg, ch). The spec requires × 3 (
 
 ## Suggested Implementation Order
 
-1. **Add Trino to compose** → C1110, C1250–C1252, C1712 + 113 trino dialect variant runs
-2. **Add Redis to compose** → C1304, C1710
-3. **Add Debezium to compose** → C1253, C1254, C1711, C1715, C1716
-4. **Enhanced HTTP test harness** → C1200–C1206, C1260–C1263, C1270–C1271
-5. **Lifecycle tests** → C1300–C1303, C1310–C1313
+1. **Run integration tests in CI** → Trino and Redis already in compose; enables C1110, C1250–C1252, C1304, C1710, C1712 + 113 trino dialect variant runs
+2. **Add Debezium to compose** → C1253, C1254, C1711, C1715, C1716
+3. **Enhanced HTTP test harness** → C1200–C1206, C1260–C1263, C1270–C1271
+4. **Lifecycle tests** → C1300–C1303, C1310–C1313

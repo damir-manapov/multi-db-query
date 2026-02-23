@@ -1,5 +1,6 @@
 {
   "name": "@mkven/multi-db-contract",
+  "description": "Contract test suites for @mkven/multi-db-query implementations",
   "version": "0.0.0",
   "author": "Damir Manapov",
   "license": "MIT",
@@ -18,7 +19,9 @@
   "dependencies": {
     "@mkven/multi-db-client": "workspace:*",
     "@mkven/multi-db-query": "workspace:*",
-    "@mkven/multi-db-validation": "workspace:*",
+    "@mkven/multi-db-validation": "workspace:*"
+  },
+  "peerDependencies": {
     "vitest": ">=2.0.0"
   },
   "scripts": {
