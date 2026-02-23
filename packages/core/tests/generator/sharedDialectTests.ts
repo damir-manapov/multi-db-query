@@ -1247,6 +1247,17 @@ export function describeSharedDialectTests(dialect: SqlDialect, cfg: DialectTest
         const result = dialect.generate(base({ where: cond }), [0])
         for (const s of cfg.injectionWhereStringColumn.notSql ?? []) expect(result.sql).not.toContain(s)
       })
+
+      it('safeWhereFn rejects malicious where function name', () => {
+        const cond: WhereFunction = {
+          fn: 'levenshtein); DROP TABLE orders;--',
+          column: col('t0', 'status'),
+          fnParamIndex: 0,
+          operator: '<=',
+          compareParamIndex: 1,
+        }
+        expect(() => dialect.generate(base({ where: cond }), ['test', 2])).toThrow('Unsupported where function')
+      })
     })
   })
 }
