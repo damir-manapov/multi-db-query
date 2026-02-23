@@ -1,16 +1,16 @@
 /**
  * Unit-mode wrapper for the canonical injection contract.
  *
- * Instead of duplicating the 66 injection tests, we reuse
+ * Instead of duplicating the 74 injection tests, we reuse
  * `describeInjectionContract` from the contract package with a thin
  * `QueryContract` proxy that injects `executeMode: 'sql-only'` into
  * every query — no live databases required.
  */
 import type { CacheProvider, CreateMultiDbOptions, DbExecutor } from '@mkven/multi-db-query'
 import { createMultiDb, staticMetadata, staticRoles } from '@mkven/multi-db-query'
-import { describeInjectionContract } from '../src/contract/injectionContract.js'
-import type { QueryContract } from '../src/contract/queryContract.js'
-import { metadata, roles } from './contract/fixture.js'
+import { describeInjectionContract } from '../../src/contract/injectionContract.js'
+import type { QueryContract } from '../../src/contract/queryContract.js'
+import { metadata, roles } from '../contract/fixture.js'
 
 // ── Mock adapters ──────────────────────────────────────────────
 
