@@ -557,7 +557,10 @@ describe('Name Resolution — transitive joins', () => {
     const q: QueryDefinition = {
       from: 'users',
       columns: ['id'],
-      joins: [{ table: 'orders', columns: [] }, { table: 'invoices', columns: ['amount'] }],
+      joins: [
+        { table: 'orders', columns: [] },
+        { table: 'invoices', columns: ['amount'] },
+      ],
     }
     const result = resolveNames(q, adminCtx, index, rolesById)
     expect(result.parts.joins).toHaveLength(2)

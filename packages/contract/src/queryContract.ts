@@ -1691,19 +1691,20 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         }
       })
 
-      it.skip('C1110: meta.targetDatabase for cross-DB query', async () => {
-        // TODO: Trino catalog configuration not available in Docker Compose test setup
+      it('C1110: meta.targetDatabase for cross-DB query (sql-only)', async () => {
+        // events (ch-analytics) + users (pg-main), no sync → Trino cross-DB
         const r = await engine.query({
           definition: {
             from: 'events',
             columns: ['id'],
             joins: [{ table: 'users' }],
+            executeMode: 'sql-only',
           },
           context: admin,
         })
-        if (r.kind === 'data') {
-          // cross-DB join routes through Trino
-          expect(r.meta.targetDatabase).toBeDefined()
+        expect(r.kind).toBe('sql')
+        if (r.kind === 'sql') {
+          expect(r.meta.targetDatabase).toBe('trino')
         }
       })
 

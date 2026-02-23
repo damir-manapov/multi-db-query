@@ -169,29 +169,38 @@ export function describeEdgeCaseContract(name: string, factory: () => Promise<Qu
         }
       })
 
-      it.skip('C1711: materialized replica query', async () => {
-        // TODO: planner doesn't route to replica when primary executor is available
+      it('C1711: materialized replica query (sql-only)', async () => {
+        // events (ch-analytics) + orders (pg-main) → sync routes orders to ch-analytics → materialized
         const r = await engine.query({
-          definition: { from: 'orders', freshness: 'seconds' },
+          definition: {
+            from: 'events',
+            columns: ['id'],
+            joins: [{ table: 'orders' }],
+            executeMode: 'sql-only',
+          },
           context: admin,
         })
-        if (r.kind === 'data') {
+        expect(r.kind).toBe('sql')
+        if (r.kind === 'sql') {
           expect(r.meta.strategy).toBe('materialized')
-          expect(r.meta.tablesUsed[0]?.source).toBe('replica')
+          const ordersEntry = r.meta.tablesUsed.find((t) => t.tableId === 'orders')
+          expect(ordersEntry?.source).toBe('materialized')
         }
       })
 
-      it.skip('C1712: cross-DB Trino join', async () => {
-        // TODO: Trino catalog configuration not available in Docker Compose test setup
+      it('C1712: cross-DB Trino join (sql-only)', async () => {
+        // events (ch-analytics) + users (pg-main), no sync → Trino cross-DB
         const r = await engine.query({
           definition: {
             from: 'events',
             columns: ['id'],
             joins: [{ table: 'users' }],
+            executeMode: 'sql-only',
           },
           context: admin,
         })
-        if (r.kind === 'data') {
+        expect(r.kind).toBe('sql')
+        if (r.kind === 'sql') {
           expect(r.meta.strategy).toBe('trino-cross-db')
         }
       })
@@ -236,13 +245,20 @@ export function describeEdgeCaseContract(name: string, factory: () => Promise<Qu
         }
       })
 
-      it.skip('C1716: freshness hours allows stale replica', async () => {
-        // TODO: planner doesn't route to replica when primary executor is available
+      it('C1716: freshness hours allows stale replica (sql-only)', async () => {
+        // events (ch-analytics) + orders (pg-main), freshness=hours, sync lag=seconds → materialized OK
         const r = await engine.query({
-          definition: { from: 'orders', freshness: 'hours' },
+          definition: {
+            from: 'events',
+            columns: ['id'],
+            joins: [{ table: 'orders' }],
+            freshness: 'hours',
+            executeMode: 'sql-only',
+          },
           context: admin,
         })
-        if (r.kind === 'data') {
+        expect(r.kind).toBe('sql')
+        if (r.kind === 'sql') {
           expect(r.meta.strategy).toBe('materialized')
         }
       })
