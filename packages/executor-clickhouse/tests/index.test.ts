@@ -80,4 +80,13 @@ describe('executor-clickhouse', () => {
       expect(e.code).toBe('QUERY_FAILED')
     }
   })
+
+  it('close() delegates to client.close()', async () => {
+    const { createClickHouseExecutor } = await import('../src/index.js')
+    const executor = createClickHouseExecutor({})
+
+    mockClose.mockResolvedValue(undefined)
+    await executor.close()
+    expect(mockClose).toHaveBeenCalledOnce()
+  })
 })

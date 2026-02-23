@@ -172,4 +172,10 @@ describe('executor-trino', () => {
       }
     })
   })
+
+  // ── close() ───────────────────────────────────────────────
+
+  it('close() resolves without error (stateless)', async () => {
+    await expect(executor.close()).resolves.toBeUndefined()
+  })
 })
