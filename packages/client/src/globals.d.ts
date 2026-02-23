@@ -10,6 +10,7 @@ interface MdFetchRequestInit {
 interface MdFetchResponse {
   readonly ok: boolean
   readonly status: number
+  readonly statusText: string
   json(): Promise<unknown>
 }
 

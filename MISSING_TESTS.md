@@ -2,7 +2,7 @@
 
 All **167** contract test IDs from [CONTRACT_TESTS.md](https://github.com/making-ventures/concept-multi-db-query-engine/blob/main/CONTRACT_TESTS.md) are implemented.
 
-Current test executions: **632** (includes injection sql-only unit tests).
+Current test executions: **661** (includes masking, logger, and injection sql-only unit tests).
 
 ---
 
@@ -17,7 +17,7 @@ These tests are implemented but skipped (`it.skip`) due to engine bugs, missing 
 | C602 | queryContract.ts | EXISTS with subquery filter — "No alias for table" when EXISTS has nested filters |
 | C604 | queryContract.ts | Nested EXISTS — "No alias for table" when EXISTS has nested filters |
 
-### Feature Gaps (5)
+### Feature Gaps (6)
 
 | ID | File | Description |
 |----|------|-------------|
