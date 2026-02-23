@@ -26,7 +26,8 @@
     { "path": "packages/executor-clickhouse" },
     { "path": "packages/executor-trino" },
     { "path": "packages/cache-redis" },
-    { "path": "packages/client" }
+    { "path": "packages/client" },
+    { "path": "packages/contract" }
   ],
   "files": []
 }

@@ -18,16 +18,9 @@
   "dependencies": {
     "@mkven/multi-db-validation": "workspace:*"
   },
-  "peerDependencies": {
-    "vitest": ">=2.0.0"
-  },
-  "peerDependenciesMeta": {
-    "vitest": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@mkven/multi-db-cache-redis": "workspace:*",
+    "@mkven/multi-db-contract": "workspace:*",
     "@mkven/multi-db-executor-clickhouse": "workspace:*",
     "@mkven/multi-db-executor-postgres": "workspace:*",
     "@mkven/multi-db-executor-trino": "workspace:*",

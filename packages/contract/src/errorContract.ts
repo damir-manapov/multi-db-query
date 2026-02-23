@@ -1,3 +1,4 @@
+import { createMultiDbClient } from '@mkven/multi-db-client'
 import type { CreateMultiDbOptions, MultiDb } from '@mkven/multi-db-query'
 import { createMultiDb, staticMetadata, staticRoles } from '@mkven/multi-db-query'
 import {
@@ -8,7 +9,6 @@ import {
   ValidationError,
 } from '@mkven/multi-db-validation'
 import { describe, expect, it } from 'vitest'
-import { createMultiDbClient } from '../client.js'
 
 // ── Helpers ────────────────────────────────────────────────────
 

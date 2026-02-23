@@ -1,0 +1,27 @@
+{
+  "name": "@mkven/multi-db-contract",
+  "version": "0.0.0",
+  "author": "Damir Manapov",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@mkven/multi-db-client": "workspace:*",
+    "@mkven/multi-db-query": "workspace:*",
+    "@mkven/multi-db-validation": "workspace:*",
+    "vitest": ">=2.0.0"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  }
+}

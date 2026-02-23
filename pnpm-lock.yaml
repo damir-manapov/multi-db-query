@@ -47,13 +47,13 @@ importers:
       '@mkven/multi-db-validation':
         specifier: workspace:*
         version: link:../validation
-      vitest:
-        specifier: '>=2.0.0'
-        version: 4.0.18
     devDependencies:
       '@mkven/multi-db-cache-redis':
         specifier: workspace:*
         version: link:../cache-redis
+      '@mkven/multi-db-contract':
+        specifier: workspace:*
+        version: link:../contract
       '@mkven/multi-db-executor-clickhouse':
         specifier: workspace:*
         version: link:../executor-clickhouse
@@ -66,6 +66,21 @@ importers:
       '@mkven/multi-db-query':
         specifier: workspace:*
         version: link:../core
+
+  packages/contract:
+    dependencies:
+      '@mkven/multi-db-client':
+        specifier: workspace:*
+        version: link:../client
+      '@mkven/multi-db-query':
+        specifier: workspace:*
+        version: link:../core
+      '@mkven/multi-db-validation':
+        specifier: workspace:*
+        version: link:../validation
+      vitest:
+        specifier: '>=2.0.0'
+        version: 4.0.18
 
   packages/core:
     dependencies:

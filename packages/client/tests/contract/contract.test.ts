@@ -1,4 +1,12 @@
 import { createRedisCache } from '@mkven/multi-db-cache-redis'
+import {
+  describeEdgeCaseContract,
+  describeErrorContract,
+  describeHealthLifecycleContract,
+  describeInjectionContract,
+  describeQueryContract,
+  describeValidationContract,
+} from '@mkven/multi-db-contract'
 import { createClickHouseExecutor } from '@mkven/multi-db-executor-clickhouse'
 import { createPostgresExecutor } from '@mkven/multi-db-executor-postgres'
 import { createTrinoExecutor } from '@mkven/multi-db-executor-trino'
@@ -15,12 +23,6 @@ import { afterAll, beforeAll } from 'vitest'
 import { createServer } from '../../../../compose/server/index.js'
 import type { ValidateResult } from '../../src/client.js'
 import { createMultiDbClient } from '../../src/client.js'
-import { describeEdgeCaseContract } from '../../src/contract/edgeCaseContract.js'
-import { describeErrorContract } from '../../src/contract/errorContract.js'
-import { describeHealthLifecycleContract } from '../../src/contract/healthLifecycleContract.js'
-import { describeInjectionContract } from '../../src/contract/injectionContract.js'
-import { describeQueryContract } from '../../src/contract/queryContract.js'
-import { describeValidationContract } from '../../src/contract/validationContract.js'
 import { metadata, roles } from './fixture.js'
 
 const PG_URL = process.env.PG_URL ?? 'postgresql://postgres:postgres@localhost:5432/multidb'

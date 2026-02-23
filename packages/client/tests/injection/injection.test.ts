@@ -6,10 +6,11 @@
  * `QueryContract` proxy that injects `executeMode: 'sql-only'` into
  * every query — no live databases required.
  */
+
+import type { QueryContract } from '@mkven/multi-db-contract'
+import { describeInjectionContract } from '@mkven/multi-db-contract'
 import type { CacheProvider, CreateMultiDbOptions, DbExecutor } from '@mkven/multi-db-query'
 import { createMultiDb, staticMetadata, staticRoles } from '@mkven/multi-db-query'
-import { describeInjectionContract } from '../../src/contract/injectionContract.js'
-import type { QueryContract } from '../../src/contract/queryContract.js'
 import { metadata, roles } from '../contract/fixture.js'
 
 // ── Mock adapters ──────────────────────────────────────────────

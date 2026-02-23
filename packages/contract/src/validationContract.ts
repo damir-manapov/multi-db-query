@@ -1,8 +1,7 @@
+import type { ValidateConfigInput, ValidateQueryInput, ValidateResult } from '@mkven/multi-db-client'
 import type { MetadataConfig, RoleMeta } from '@mkven/multi-db-validation'
 import { ConfigError, ValidationError } from '@mkven/multi-db-validation'
 import { beforeAll, describe, expect, it } from 'vitest'
-
-import type { ValidateConfigInput, ValidateQueryInput, ValidateResult } from '../client.js'
 
 // ── ValidationContract ─────────────────────────────────────────
 
