@@ -7,7 +7,7 @@ import {
   PlannerError,
   ProviderError,
   ValidationError,
-} from '../src/errors.js'
+} from '../../src/errors.js'
 
 describe('MultiDbError', () => {
   it('has code and message', () => {

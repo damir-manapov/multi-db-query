@@ -227,7 +227,7 @@ class ResolutionContext {
       return { select, columnMappings }
     }
 
-    // Build candidate columns for collision detection (concept: L1727)
+    // Build candidate columns for collision detection (see QUERY.md § Column disambiguation)
     const candidates: Array<{ apiName: string; tableId: string; tableApiName: string }> = []
 
     // From-table candidates
@@ -410,7 +410,7 @@ class ResolutionContext {
       }
     }
 
-    // Join-scoped filters (concept: L496-509 — placed in WHERE, context is joined table)
+    // Join-scoped filters (see QUERY.md § QueryJoin.filters — placed in WHERE, context is joined table)
     if (this.query.joins !== undefined) {
       for (const join of this.query.joins) {
         if (join.filters !== undefined) {

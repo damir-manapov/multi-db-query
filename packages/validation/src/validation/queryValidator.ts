@@ -143,7 +143,7 @@ export function validateQuery(
       }
 
       if (join.filters !== undefined) {
-        // For join filters, default table context is the joined table (concept: L497-509)
+        // For join filters, default table context is the joined table (see QUERY.md § QueryJoin.filters)
         // Build augmented maps so explicit `table` references to fromTable still work
         const joinFilterTables = new Map(joinedTables)
         joinFilterTables.set(fromTable.apiName, fromTable)
