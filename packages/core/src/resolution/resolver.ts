@@ -478,6 +478,7 @@ class ResolutionContext {
       return {
         column: colRef,
         not: op === 'notBetween',
+        columnType: col.type,
         fromParamIndex: this.addParam(val.from),
         toParamIndex: this.addParam(val.to),
       }

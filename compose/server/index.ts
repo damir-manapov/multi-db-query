@@ -19,9 +19,21 @@ export interface ServerConfig {
   readonly multiDbOptions: CreateMultiDbOptions
 }
 
+class HttpError extends Error {
+  readonly status: number
+  readonly code: string
+  constructor(status: number, code: string, message: string) {
+    super(message)
+    this.name = 'HttpError'
+    this.status = status
+    this.code = code
+  }
+}
+
 // ── Error mapping ──────────────────────────────────────────────
 
 function errorToStatus(err: unknown): number {
+  if (err instanceof HttpError) return err.status
   if (err instanceof ValidationError || err instanceof ConfigError) return 400
   if (err instanceof PlannerError) return 422
   if (err instanceof ExecutionError) return 500
@@ -30,6 +42,7 @@ function errorToStatus(err: unknown): number {
 }
 
 function errorToBody(err: unknown): object {
+  if (err instanceof HttpError) return { error: err.code, message: err.message }
   if (err instanceof MultiDbError) return err.toJSON()
   const msg = err instanceof Error ? err.message : String(err)
   return { error: 'InternalError', message: msg }
@@ -46,7 +59,7 @@ function readBody(req: IncomingMessage): Promise<unknown> {
         const raw = Buffer.concat(chunks).toString('utf-8')
         resolve(raw.length > 0 ? JSON.parse(raw) : undefined)
       } catch {
-        reject(new ValidationError([{ code: 'INVALID_JSON', message: 'Request body is not valid JSON', path: [] }]))
+        reject(new HttpError(400, 'INVALID_JSON', 'Request body is not valid JSON'))
       }
     })
     req.on('error', reject)
@@ -87,20 +100,18 @@ export async function createServer(config: ServerConfig): Promise<{
       } else if (method === 'POST' && url === '/query') {
         const body = (await readBody(req)) as { definition: unknown; context: unknown }
         if (!body || typeof body !== 'object') {
-          throw new ValidationError([
-            { code: 'INVALID_BODY', message: 'Request body must be an object with definition and context', path: [] },
-          ])
+          throw new HttpError(400, 'INVALID_BODY', 'Request body must be an object with definition and context')
         }
         const result = await multiDb.query(body as Parameters<MultiDb['query']>[0])
         respond(res, 200, result)
       } else if (method === 'POST' && url === '/validate/query') {
         const body = (await readBody(req)) as { definition: unknown; context: unknown }
         if (!body || typeof body !== 'object') {
-          throw new ValidationError([{ code: 'INVALID_BODY', message: 'Request body must be an object', path: [] }])
+          throw new HttpError(400, 'INVALID_BODY', 'Request body must be an object')
         }
         const err = validateQuery(
-          (body as { definition: unknown }).definition,
-          (body as { context: unknown }).context,
+          (body as { definition: unknown }).definition as Parameters<typeof validateQuery>[0],
+          (body as { context: unknown }).context as Parameters<typeof validateQuery>[1],
           metadataIndex,
           rolesData,
         )
@@ -109,9 +120,9 @@ export async function createServer(config: ServerConfig): Promise<{
       } else if (method === 'POST' && url === '/validate/config') {
         const body = (await readBody(req)) as { metadata: unknown }
         if (!body || typeof body !== 'object') {
-          throw new ValidationError([{ code: 'INVALID_BODY', message: 'Request body must be an object', path: [] }])
+          throw new HttpError(400, 'INVALID_BODY', 'Request body must be an object')
         }
-        const err = validateConfig((body as { metadata: unknown }).metadata)
+        const err = validateConfig((body as { metadata: unknown }).metadata as Parameters<typeof validateConfig>[0])
         if (err !== null) throw err
         respond(res, 200, { valid: true })
       } else {
@@ -123,8 +134,8 @@ export async function createServer(config: ServerConfig): Promise<{
     }
   }
 
-  const server = createHttpServer((req, res) => {
-    handleRequest(req, res).catch((err) => {
+  const server = createHttpServer((req: IncomingMessage, res: ServerResponse) => {
+    handleRequest(req, res).catch((err: unknown) => {
       if (!res.headersSent) {
         respond(res, 500, { error: 'InternalError', message: err instanceof Error ? err.message : String(err) })
       }
@@ -150,7 +161,7 @@ export async function createServer(config: ServerConfig): Promise<{
     async stop() {
       await multiDb.close().catch(() => {})
       return new Promise<void>((resolve, reject) => {
-        server.close((err) => (err ? reject(err) : resolve()))
+        server.close((err: Error | undefined) => (err ? reject(err) : resolve()))
       })
     },
   }

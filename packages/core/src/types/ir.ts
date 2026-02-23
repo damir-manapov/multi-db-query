@@ -60,6 +60,7 @@ export interface WhereColumnCondition {
 export interface WhereBetween {
   column: ColumnRef
   not?: boolean | undefined
+  columnType?: string | undefined
   fromParamIndex: number
   toParamIndex: number
 }

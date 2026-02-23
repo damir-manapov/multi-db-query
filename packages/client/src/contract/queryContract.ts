@@ -1654,7 +1654,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
       { variant: 'trino', samples: 'chSamples', sampleItems: 'chSampleItems', sampleDetails: 'chSampleDetails' },
     ] as const
 
-    describe.each(dialectVariants)('$variant dialect', ({ samples, sampleItems, sampleDetails }) => {
+    describe.each(dialectVariants)('$variant dialect', ({ variant, samples, sampleItems, sampleDetails }) => {
       // ── 3.1 Comparison Operators ───────────────────────────
 
       describe('3.1 Comparison Operators', () => {
@@ -1884,25 +1884,20 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         })
 
         it('C133: between on timestamp', async () => {
-          try {
-            const r = await engine.query({
-              definition: {
-                from: samples,
-                filters: [
-                  {
-                    column: 'createdAt',
-                    operator: 'between',
-                    value: { from: '2024-01-01T00:00:00Z', to: '2024-03-31T23:59:59Z' },
-                  },
-                ],
-              },
-              context: admin,
-            })
-            if (r.kind === 'data') expect(r.data.length).toBe(3)
-          } catch (err) {
-            // CH/Trino: Cannot convert ISO string to DateTime64 with String param type
-            if (samples === 'samples') throw err
-          }
+          const r = await engine.query({
+            definition: {
+              from: samples,
+              filters: [
+                {
+                  column: 'createdAt',
+                  operator: 'between',
+                  value: { from: '2024-01-01T00:00:00Z', to: '2024-03-31T23:59:59Z' },
+                },
+              ],
+            },
+            context: admin,
+          })
+          if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
         it('C134: between on date', async () => {
@@ -2007,7 +2002,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           })
           if (r.kind === 'data') {
             // PG arrays can be NULL (Delta); CH arrays are never NULL (empty instead)
-            expect(r.data.length).toBe(samples === 'samples' ? 1 : 0)
+            expect(r.data.length).toBe(variant === 'pg' ? 1 : 0)
           }
         })
 
@@ -2018,7 +2013,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           })
           if (r.kind === 'data') {
             // PG: 4 non-null; CH: 5 (arrays are never NULL)
-            expect(r.data.length).toBe(samples === 'samples' ? 4 : 5)
+            expect(r.data.length).toBe(variant === 'pg' ? 4 : 5)
           }
         })
       })
@@ -2079,7 +2074,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           if (r.kind === 'data') {
             // PG: 1 (Delta has empty array; Gamma has NULL which is not empty)
             // CH: 2 (both Gamma and Delta have empty arrays — CH converts NULL to [])
-            expect(r.data.length).toBe(samples === 'samples' ? 1 : 2)
+            expect(r.data.length).toBe(variant === 'pg' ? 1 : 2)
           }
         })
 
@@ -2967,16 +2962,11 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         })
 
         it('C605: counted EXISTS (>=)', async () => {
-          try {
-            const r = await engine.query({
-              definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '>=', value: 2 } }] },
-              context: admin,
-            })
-            if (r.kind === 'data') expect(r.data.length).toBe(2) // ids 1, 5
-          } catch (err) {
-            // CH/Trino: Cannot decorrelate correlated subquery with LIMIT
-            if (samples === 'samples') throw err
-          }
+          const r = await engine.query({
+            definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '>=', value: 2 } }] },
+            context: admin,
+          })
+          if (r.kind === 'data') expect(r.data.length).toBe(2) // ids 1, 5
         })
 
         it('C606: counted EXISTS (=)', async () => {
@@ -2988,19 +2978,14 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         })
 
         it('C607: counted EXISTS ignores exists field', async () => {
-          try {
-            const r = await engine.query({
-              definition: {
-                from: samples,
-                filters: [{ table: sampleItems, exists: false, count: { operator: '>=', value: 1 } }],
-              },
-              context: admin,
-            })
-            if (r.kind === 'data') expect(r.data.length).toBe(4) // ids 1,2,3,5 — count decides, not exists
-          } catch (err) {
-            // CH/Trino: Cannot decorrelate correlated subquery with LIMIT
-            if (samples === 'samples') throw err
-          }
+          const r = await engine.query({
+            definition: {
+              from: samples,
+              filters: [{ table: sampleItems, exists: false, count: { operator: '>=', value: 1 } }],
+            },
+            context: admin,
+          })
+          if (r.kind === 'data') expect(r.data.length).toBe(4) // ids 1,2,3,5 — count decides, not exists
         })
 
         it('C608: self-referencing EXISTS', async () => {
@@ -3024,32 +3009,19 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         })
 
         it('C610: counted EXISTS (>)', async () => {
-          try {
-            const r = await engine.query({
-              definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '>', value: 1 } }] },
-              context: admin,
-            })
-            if (r.kind === 'data') expect(r.data.length).toBe(2) // ids 1, 5
-          } catch (err) {
-            // CH/Trino: Cannot decorrelate correlated subquery with LIMIT
-            if (samples === 'samples') throw err
-          }
+          const r = await engine.query({
+            definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '>', value: 1 } }] },
+            context: admin,
+          })
+          if (r.kind === 'data') expect(r.data.length).toBe(2) // ids 1, 5
         })
 
         it('C611: counted EXISTS (<)', async () => {
-          try {
-            const r = await engine.query({
-              definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '<', value: 2 } }] },
-              context: admin,
-            })
-            if (r.kind === 'data') {
-              // PG: 3 (includes samples with 0 items)
-              // CH/Trino: 2 (decorrelation excludes 0-item rows)
-              expect(r.data.length).toBe(samples === 'samples' ? 3 : 2)
-            }
-          } catch (err) {
-            if (samples === 'samples') throw err
-          }
+          const r = await engine.query({
+            definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '<', value: 2 } }] },
+            context: admin,
+          })
+          if (r.kind === 'data') expect(r.data.length).toBe(3) // ids 2,3,4 (includes 0-item parent)
         })
 
         it('C612: counted EXISTS (!=)', async () => {
@@ -3061,19 +3033,11 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         })
 
         it('C613: counted EXISTS (<=)', async () => {
-          try {
-            const r = await engine.query({
-              definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '<=', value: 1 } }] },
-              context: admin,
-            })
-            if (r.kind === 'data') {
-              // PG: 3 (includes samples with 0 items)
-              // CH/Trino: 2 (decorrelation excludes 0-item rows)
-              expect(r.data.length).toBe(samples === 'samples' ? 3 : 2)
-            }
-          } catch (err) {
-            if (samples === 'samples') throw err
-          }
+          const r = await engine.query({
+            definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '<=', value: 1 } }] },
+            context: admin,
+          })
+          if (r.kind === 'data') expect(r.data.length).toBe(3) // ids 2,3,4 (includes 0-item parent)
         })
       })
     })

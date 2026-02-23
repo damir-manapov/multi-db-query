@@ -193,10 +193,20 @@ class ChGenerator {
   // WhereBetween
   private whereBetween(c: WhereBetween): string {
     const col = quoteCol(c.column)
-    if (c.not === true) {
-      return `NOT (${col} BETWEEN ${this.ref(c.fromParamIndex)} AND ${this.ref(c.toParamIndex)})`
+    // Timestamp columns: use parseDateTimeBestEffort to handle ISO 8601 strings with tz (e.g. trailing Z)
+    if (c.columnType === 'timestamp') {
+      const fromRef = `parseDateTimeBestEffort(${this.ref(c.fromParamIndex)})`
+      const toRef = `parseDateTimeBestEffort(${this.ref(c.toParamIndex)})`
+      if (c.not === true) return `NOT (${col} BETWEEN ${fromRef} AND ${toRef})`
+      return `${col} BETWEEN ${fromRef} AND ${toRef}`
     }
-    return `${col} BETWEEN ${this.ref(c.fromParamIndex)} AND ${this.ref(c.toParamIndex)}`
+    const chType = c.columnType !== undefined ? chColumnTypeMap(c.columnType) : undefined
+    const fromRef = chType !== undefined ? this.refTyped(c.fromParamIndex, chType) : this.ref(c.fromParamIndex)
+    const toRef = chType !== undefined ? this.refTyped(c.toParamIndex, chType) : this.ref(c.toParamIndex)
+    if (c.not === true) {
+      return `NOT (${col} BETWEEN ${fromRef} AND ${toRef})`
+    }
+    return `${col} BETWEEN ${fromRef} AND ${toRef}`
   }
 
   // WhereFunction — levenshtein → editDistance
@@ -239,7 +249,47 @@ class ChGenerator {
 
   // WhereCountedSubquery
   private whereCounted(c: WhereCountedSubquery): string {
-    return `(${this.countSubquery(c.subquery, c.operator, c.countParamIndex)}) ${c.operator} ${this.refTyped(c.countParamIndex, 'UInt64')}`
+    // Correlated subqueries are decorrelated into INNER JOINs by CH, which drops 0-match rows.
+    // For < and <= use NOT IN with inverted HAVING to include 0-count parents.
+    // For >= and > use IN with direct HAVING (0-count parents correctly excluded).
+    if (c.operator === '<' || c.operator === '<=') {
+      return this.countedNotIn(c.subquery, c.operator, c.countParamIndex)
+    }
+    if (c.operator === '>=' || c.operator === '>') {
+      return this.countedIn(c.subquery, c.operator, c.countParamIndex)
+    }
+    return `(${this.countSubquery(c.subquery)}) ${c.operator} ${this.refTyped(c.countParamIndex, 'UInt64')}`
+  }
+
+  /**
+   * Rewrite `COUNT(*) < N` as `parent.id NOT IN (SELECT fk FROM child GROUP BY fk HAVING COUNT(*) >= N)`.
+   * This avoids correlated subqueries and correctly includes parents with zero matching children.
+   */
+  private countedNotIn(sub: CorrelatedSubquery, operator: string, countParamIndex: number): string {
+    const invertedOp = operator === '<' ? '>=' : '>'
+    const fkCol = quoteCol(sub.join.rightColumn)
+    const parentCol = quoteCol(sub.join.leftColumn)
+    let inner = `SELECT ${fkCol} FROM ${quoteTable(sub.from)}`
+    if (sub.where !== undefined) {
+      inner += ` WHERE ${this.whereNode(sub.where)}`
+    }
+    inner += ` GROUP BY ${fkCol} HAVING COUNT(*) ${invertedOp} ${this.refTyped(countParamIndex, 'UInt64')}`
+    return `${parentCol} NOT IN (${inner})`
+  }
+
+  /**
+   * Rewrite `COUNT(*) >= N` as `parent.id IN (SELECT fk FROM child GROUP BY fk HAVING COUNT(*) >= N)`.
+   * This avoids correlated subqueries; parents with zero children are correctly excluded.
+   */
+  private countedIn(sub: CorrelatedSubquery, operator: string, countParamIndex: number): string {
+    const fkCol = quoteCol(sub.join.rightColumn)
+    const parentCol = quoteCol(sub.join.leftColumn)
+    let inner = `SELECT ${fkCol} FROM ${quoteTable(sub.from)}`
+    if (sub.where !== undefined) {
+      inner += ` WHERE ${this.whereNode(sub.where)}`
+    }
+    inner += ` GROUP BY ${fkCol} HAVING COUNT(*) ${operator} ${this.refTyped(countParamIndex, 'UInt64')}`
+    return `${parentCol} IN (${inner})`
   }
 
   // --- Subquery ---
@@ -252,33 +302,12 @@ class ChGenerator {
     return sql
   }
 
-  private countSubquery(
-    sub: CorrelatedSubquery,
-    operator?: string | undefined,
-    countParamIndex?: number | undefined,
-  ): string {
-    const limit = this.countLimit(operator, countParamIndex)
-    if (limit !== undefined) {
-      let inner = `SELECT 1 FROM ${quoteTable(sub.from)} WHERE ${quoteCol(sub.join.leftColumn)} = ${quoteCol(sub.join.rightColumn)}`
-      if (sub.where !== undefined) {
-        inner += ` AND ${this.whereNode(sub.where)}`
-      }
-      inner += ` LIMIT ${String(limit)}`
-      return `SELECT COUNT(*) FROM (${inner}) AS \`_c\``
-    }
+  private countSubquery(sub: CorrelatedSubquery): string {
     let sql = `SELECT COUNT(*) FROM ${quoteTable(sub.from)} WHERE ${quoteCol(sub.join.leftColumn)} = ${quoteCol(sub.join.rightColumn)}`
     if (sub.where !== undefined) {
       sql += ` AND ${this.whereNode(sub.where)}`
     }
     return sql
-  }
-
-  private countLimit(operator: string | undefined, countParamIndex: number | undefined): number | undefined {
-    if (operator === undefined || countParamIndex === undefined) return undefined
-    if (operator !== '>=' && operator !== '>') return undefined
-    const value = this.input[countParamIndex]
-    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return undefined
-    return operator === '>=' ? value : value + 1
   }
 
   // --- HAVING ---

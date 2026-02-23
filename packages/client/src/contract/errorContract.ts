@@ -251,8 +251,8 @@ export function describeErrorContract(
       })
 
       it('C1253: freshness conflict with replica lag', async () => {
-        // orders has externalSync with estimatedLag='seconds'
-        // freshness='realtime' with pg-main removed → only materialized replica → FRESHNESS_UNMET
+        // orders is on pg-main; removing its executor makes the direct plan fail at execution.
+        // The planner succeeds (single-table direct plan), but executor is missing at runtime.
         const opts = getOptions()
         const noDirectOpts: CreateMultiDbOptions = {
           ...opts,
@@ -267,12 +267,12 @@ export function describeErrorContract(
             definition: { from: 'orders', freshness: 'realtime' },
             context: admin,
           })
-          expect.fail('Expected PlannerError or ExecutionError')
+          expect.fail('Expected ExecutionError')
         } catch (err) {
-          // May surface as PlannerError (FRESHNESS_UNMET) or ExecutionError (missing executor)
-          const isPlanner = err instanceof PlannerError
-          const isExec = err instanceof ExecutionError
-          expect(isPlanner || isExec).toBe(true)
+          expect(err).toBeInstanceOf(ExecutionError)
+          if (err instanceof ExecutionError) {
+            expect(err.code).toBe('EXECUTOR_MISSING')
+          }
         } finally {
           await engine?.close()
         }
